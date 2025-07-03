@@ -13,13 +13,13 @@ from core.models import Sessions, Drivers, CarData
 from dotenv import load_dotenv
 from update_token import update_api_token_if_needed
 
-ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') # Caminho absoluto para o env.cfg
+ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
 class Command(BaseCommand):
     help = 'Importa dados de telemetria (car_data) da API OpenF1 para o PostgreSQL de forma otimizada.'
 
     API_URL = "https://api.openf1.org/v1/car_data"
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
+#    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
     API_DELAY_SECONDS = 0.2
 
     PRIMARY_N_GEAR_FILTER = "n_gear>0"

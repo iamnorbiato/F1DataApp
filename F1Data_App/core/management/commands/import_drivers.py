@@ -1,5 +1,4 @@
 # G:\Learning\F1Data\F1Data_App\core\management\commands\import_drivers.py
-
 import requests
 import json
 from datetime import datetime
@@ -8,53 +7,40 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
+from django.conf import settings # Importado para settings.BASE_DIR
 
-from core.models import Drivers, Meetings, Sessions
+from core.models import Drivers, Meetings, Sessions # Certifique-se de que core.models.Drivers está disponível e correto
 from dotenv import load_dotenv
 from update_token import update_api_token_if_needed
+import pytz # Para manipulação de fusos horários
 
-# --- CORREÇÃO AQUI: Usa settings.BASE_DIR para o caminho do env.cfg ---
-ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
-# -----------------------------------------------------------------------
+ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') 
 
 class Command(BaseCommand):
     help = 'Importa dados de pilotos (drivers) da API OpenF1 de forma eficiente e os insere na tabela drivers do PostgreSQL usando ORM.'
 
     API_URL = "https://api.openf1.org/v1/drivers"
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
+    # CONFIG_FILE e get_config_value removidos, pois não estamos usando import_config.json
+    # CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json') # REMOVIDO
+
     API_DELAY_SECONDS = 0.2
+    API_MAX_RETRIES = 3 
+    API_RETRY_DELAY_SECONDS = 5 
 
-    def get_config_value(self, key=None, default=None, section=None):
-        config = {}
-        if not os.path.exists(self.CONFIG_FILE):
-            self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
-            return default
-        try:
-            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+    warnings_count = 0
+    all_warnings_details = []
 
-            if section:
-                section_data = config.get(section, default if key is None else {})
-                if key is None:
-                    return section_data
-                else:
-                    return section_data.get(key, default)
-            else:
-                if key is None:
-                    return config
-                else:
-                    return config.get(key, default)
-        except json.JSONDecodeError as e:
-            raise CommandError(f"Erro ao ler/parsear o arquivo de configuração JSON '{self.CONFIG_FILE}': {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
+    def add_warning(self, message):
+        self.warnings_count += 1
+        self.all_warnings_details.append(message)
+        self.stdout.write(self.style.WARNING(message))
 
     def get_last_processed_meeting_key_from_drivers(self):
         self.stdout.write(self.style.MIGRATE_HEADING("Verificando o último meeting_key processado na tabela 'drivers'..."))
         try:
             last_driver = Drivers.objects.order_by('-meeting_key').first()
             if last_driver:
-                self.stdout.write(f"Último meeting_key encontrado na tabela 'drivers': {last_driver.meeting_key}")
+                self.stdout.write(self.style.SUCCESS(f"Último meeting_key encontrado na tabela 'drivers': {last_driver.meeting_key}"))
                 return last_driver.meeting_key
             self.stdout.write("Nenhum meeting_key encontrado no DB. Começando do zero.")
             return 0
@@ -73,21 +59,31 @@ class Command(BaseCommand):
         if use_token:
             api_token = os.getenv('OPENF1_API_TOKEN')
             if not api_token:
-                self.warnings_count += 1
+                self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
                 raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
             else:
                 headers["Authorization"] = f"Bearer {api_token}"
         else:
-            # A mensagem geral de desativação do token será controlada no handle()
-            pass 
+            self.add_warning("Uso do token desativado (use_token=False). Requisição será feita sem Authorization.")
+            pass
 
-        self.stdout.write(self.style.MIGRATE_HEADING(f"Buscando dados de drivers da API: {url}"))
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            raise CommandError(f"Erro ao buscar dados de drivers da API ({url}): {e}")
+        for attempt in range(self.API_MAX_RETRIES):
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                status_code = getattr(response, 'status_code', 'Unknown')
+                if status_code in [500, 502, 503, 504] and attempt < self.API_MAX_RETRIES - 1:
+                    delay = self.API_RETRY_DELAY_SECONDS * (2 ** attempt)
+                    self.stdout.write(self.style.WARNING(f"  Aviso: Erro {status_code} da API para URL: {url}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos..."))
+                    self.warnings_count += 1
+                    time.sleep(delay)
+                else:
+                    return {"error_status": status_code, 
+                            "error_url": url, 
+                            "error_message": str(e)}
+        return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
     def insert_driver_entry(self, driver_data):
         try:
@@ -134,7 +130,10 @@ class Command(BaseCommand):
             raise
 
     def handle(self, *args, **options):
-        load_dotenv()
+        load_dotenv(dotenv_path=ENV_FILE_PATH)
+
+        self.warnings_count = 0
+        self.all_warnings_details = []
 
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
 
@@ -142,11 +141,11 @@ class Command(BaseCommand):
             try:
                 update_api_token_if_needed()
             except Exception as e:
-                raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}")
+                raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}. Não é possível prosseguir com a importação.")
         else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no .env)."))
+            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg). Buscando dados históricos."))
 
-        self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Drivers (ORM)..."))
+        self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Drivers (ORM - Otimizado API)..."))
 
         drivers_found_api = 0
         drivers_inserted_db = 0
@@ -185,4 +184,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Drivers encontrados na API: {drivers_found_api}"))
             self.stdout.write(self.style.SUCCESS(f"Drivers inseridos: {drivers_inserted_db}"))
             self.stdout.write(self.style.NOTICE(f"Drivers ignorados (já existiam): {drivers_skipped_db}"))
+            self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
+            if self.all_warnings_details:
+                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+                for warn_msg in self.all_warnings_details:
+                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
             self.stdout.write(self.style.MIGRATE_HEADING("----------------------------------------"))

@@ -3,58 +3,40 @@ import requests
 import json
 from datetime import datetime
 import os
-import time # Para o sleep da API
+import time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
+from django.conf import settings # Importado para settings.BASE_DIR
 
 # Importa os modelos necessários
 from core.models import Sessions, TeamRadio # Precisamos de Sessions para obter os pares (meeting_key, session_key)
-from dotenv import load_dotenv # Para carregar variáveis do .env
-from update_token import update_api_token_if_needed # Para verificar/renovar o token da API
+from dotenv import load_dotenv
+from update_token import update_api_token_if_needed
+import pytz # Para manipulação de fusos horários
 
-# --- CORREÇÃO AQUI: Usa settings.BASE_DIR para o caminho do env.cfg ---
-ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
-# -----------------------------------------------------------------------
+ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') 
 
 class Command(BaseCommand):
     help = 'Importa dados de rádio da equipe (team_radio) da API OpenF1 e os insere na tabela teamradio do PostgreSQL usando ORM.'
 
     API_URL = "https://api.openf1.org/v1/team_radio" # URL da API para team_radio
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json') # Caminho para o arquivo de config
 
-    API_DELAY_SECONDS = 0.2 # <--- Adicionado: Delay de 0.2 segundos entre as chamadas da API (ajuste conforme necessário)
+    API_DELAY_SECONDS = 0.2 # Delay de 0.2 segundos entre as chamadas da API (ajuste conforme necessário)
+    API_MAX_RETRIES = 3 
+    API_RETRY_DELAY_SECONDS = 5 
+
+    warnings_count = 0
+    all_warnings_details = []
+
+    def add_warning(self, message):
+        self.warnings_count += 1
+        self.all_warnings_details.append(message)
+        self.stdout.write(self.style.WARNING(message))
 
     def get_config_value(self, key=None, default=None, section=None):
-        """
-        Lê um valor de configuração de um arquivo JSON.
-        Se 'key' for None e 'section' for fornecido, retorna o dicionário completo da seção.
-        Assume que o arquivo está na mesma pasta do script.
-        """
-        config = {}
-        if not os.path.exists(self.CONFIG_FILE):
-            self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
-            return default
-        try:
-            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-
-            if section:
-                section_data = config.get(section, default if key is None else {})
-                if key is None:
-                    return section_data
-                else:
-                    return section_data.get(key, default)
-            else:
-                if key is None:
-                    return config
-                else:
-                    return config.get(key, default)
-
-        except json.JSONDecodeError as e:
-            raise CommandError(f"Erro ao ler/parsear o arquivo de configuração JSON '{self.CONFIG_FILE}': {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
+        # Este método não é mais usado por não usarmos import_config.json
+        pass # Apenas um placeholder, ele deve ser removido ou não ser chamado.
 
     def get_meeting_session_pairs_to_process(self):
         """
@@ -104,21 +86,30 @@ class Command(BaseCommand):
         if use_token:
             api_token = os.getenv('OPENF1_API_TOKEN')
             if not api_token:
-                self.warnings_count += 1
+                self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
                 raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
             else:
                 headers["Authorization"] = f"Bearer {api_token}"
         else:
-            # A mensagem geral de desativação do token será controlada no handle()
-            pass 
+            self.add_warning("Uso do token desativado (use_token=False). Requisição será feita sem Authorization.")
+            pass
 
-        self.stdout.write(self.style.MIGRATE_HEADING(f"Buscando dados de teamradio para meeting_key {meeting_key}, session_key {session_key} da API: {url}"))
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            raise CommandError(f"Erro ao buscar dados de teamradio da API ({url}): {e}")
+        for attempt in range(self.API_MAX_RETRIES):
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                status_code = getattr(response, 'status_code', 'Unknown')
+                if status_code in [500, 502, 503, 504] and attempt < self.API_MAX_RETRIES - 1:
+                    delay = self.API_RETRY_DELAY_SECONDS * (2 ** attempt)
+                    self.add_warning(f"Erro {status_code} da API para URL: {url}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos...")
+                    time.sleep(delay)
+                else:
+                    return {"error_status": status_code,
+                            "error_url": url,
+                            "error_message": str(e)}
+        return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
     def insert_teamradio_entry(self, tr_data):
         """
@@ -168,18 +159,20 @@ class Command(BaseCommand):
             raise # Re-levanta o erro para o handle() capturá-lo e fazer rollback
 
     def handle(self, *args, **options):
-        load_dotenv() # Carrega as variáveis do .env
+        load_dotenv(dotenv_path=ENV_FILE_PATH)
 
-        # >>>>> ADICIONADO: Lógica para usar/não usar o token <<<<<
-        use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true' # Lê a flag do .env
+        self.warnings_count = 0
+        self.all_warnings_details = [] # Zera a lista de detalhes de avisos para esta execução
+
+        use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
 
         if use_api_token_flag:
             try:
-                update_api_token_if_needed() # Verifica/renova o token
+                update_api_token_if_needed()
             except Exception as e:
                 raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}. Não é possível prosseguir com a importação.")
         else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no .env). Buscando dados históricos."))
+            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg). Buscando dados históricos."))
 
 
         self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Team Radio (ORM)..."))
@@ -212,11 +205,17 @@ class Command(BaseCommand):
                     # 2. Buscar dados de teamradio para o par atual da API
                     tr_data_from_api = self.fetch_teamradio_data(meeting_key=meeting_key, session_key=session_key, use_token=use_api_token_flag) # Passa a flag
 
-                    if not tr_data_from_api:
-                        self.stdout.write(self.style.WARNING(f"Aviso: Nenhuma registro de teamradio encontrado na API para meeting_key={meeting_key}, session_key={session_key}."))
-                        continue # Pula para o próximo par se não houver dados
+                    if isinstance(tr_data_from_api, dict) and "error_status" in tr_data_from_api:
+                        self.stdout.write(self.style.ERROR(f"  Erro na API para Sess {session_key}, Mtg {meeting_key}: {tr_data_from_api['error_message']}. Pulando esta sessão."))
+                        self.add_warning(f"Erro API Sess {session_key}, Mtg {meeting_key}: {tr_data_from_api['error_message']}") # Adiciona ao detalhe
+                        continue 
 
-                    # self.stdout.write(f"Encontradas {len(tr_data_from_api)} registros para meeting_key={meeting_key}, session_key={session_key}. Inserindo...") # Removido para output limpo
+                    if not tr_data_from_api:
+                        self.stdout.write(self.style.WARNING(f"  Aviso: Nenhuma registro de teamradio encontrado na API para Sess {session_key}, Mtg {meeting_key}."))
+                        self.add_warning(f"Aviso: API vazia para Sess {session_key}, Mtg {meeting_key}.")
+                        continue
+
+                    self.stdout.write(f"  Encontrados {len(tr_data_from_api)} registros para Sess {session_key}. Filtrando por driver e construindo...")
 
                     # 3. Inserir cada registro no DB
                     for tr_entry in tr_data_from_api:
@@ -228,6 +227,7 @@ class Command(BaseCommand):
                                 tr_entries_skipped_db += 1
                         except Exception as tr_insert_e:
                             self.stdout.write(self.style.ERROR(f"Erro ao processar/inserir UM REGISTRO de teamradio para meeting_key={meeting_key}, session_key={session_key}: {tr_insert_e}. Pulando para o próximo registro."))
+                            self.add_warning(f"Erro inserir TR (Mtg {meeting_key}, Sess {session_key}): {tr_insert_e}") # Adiciona ao detalhe
 
                     # Adiciona um delay APÓS cada chamada de API (loop do par meeting_key/session_key)
                     if api_delay > 0:
@@ -241,10 +241,14 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f"Erro inesperado durante a importação de Team Radio (ORM): {e}")
         finally:
-            # Sumário final
             self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo da Importação de Team Radio (ORM) ---"))
             self.stdout.write(self.style.SUCCESS(f"Pares (meeting_key, session_key) processados: {pairs_processed_count}"))
             self.stdout.write(self.style.SUCCESS(f"Registros inseridos no DB: {tr_entries_inserted_db}"))
             self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB): {tr_entries_skipped_db}"))
+            self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
+            if self.all_warnings_details:
+                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+                for warn_msg in self.all_warnings_details:
+                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
             self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
             self.stdout.write(self.style.SUCCESS("Importação de team radio finalizada!"))
