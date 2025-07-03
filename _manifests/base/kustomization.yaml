@@ -1,0 +1,23 @@
+# _manifests/base/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Recursos base
+resources:
+  - namespace.yaml
+  - f1data-db-secret.yaml
+  - appserver-deployment.yaml
+  - appserver-service.yaml
+  - webserver-deployment.yaml
+  - webserver-service.yaml
+
+# Geração do ConfigMap base (que será patchado nos overlays)
+configMapGenerator:
+- name: f1data-config
+  literals:
+  - DATABASE_HOST=192.168.0.53 # Valor padrão, pode ser patchado
+  - DATABASE_PORT=5432        # Valor padrão, pode ser patchado
+  - DATABASE_USER=f1data   # Valor padrão, pode ser patchado
+  - DATABASE_NAME=f1data    # Valor padrão, pode ser patchado
+  - KUBERNETES_NAMESPACE=f1data
+  - DEBUG_MODE=1              # Valor padrão, será patchado para 0 em prod

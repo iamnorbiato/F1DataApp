@@ -1,0 +1,96 @@
+# --- Arquivos Padrão de Python/Ambiente ---
+# Byte-code files
+*.pyc
+__pycache__/
+
+# Python virtual environment
+/venv/
+/venv_temp_test/ # Nome do seu venv temporário
+/env/
+/Envs/
+/env.bak/
+/build/
+/dist/
+/develop-eggs/
+.Python
+*.egg-info/
+.installed.cfg
+lib/
+lib64/
+bin/
+include/
+share/
+/local/
+
+# Logs
+*.log
+celerybeat.pid
+
+# IDE-specific files
+.vscode/        # VS Code settings
+.idea/          # IntelliJ/PyCharm
+.project
+.externalToolBuilders
+.pydevproject
+*.swp
+*.swo
+
+# Database
+db.sqlite3      # SQLite database (if used)
+*.db            # Generic database files
+
+# --- Arquivos de Configuração Sensíveis (NÃO DEVEM IR PARA O GIT) ---
+.env            # Ignora o arquivo .env na raiz
+**/.env         # Ignora qualquer arquivo .env em qualquer subpasta (CRÍTICO)
+**/env.cfg
+.flaskenv       # Flask .env
+.passwd         # Senhas
+.htpasswd
+*.key           # Chaves privadas (genérico)
+*.pem           # Certificados (genérico)
+*.p12
+*.pfx
+_manifests/base/f1data-db-secret.yaml
+
+# Arquivos de Secret ESPECÍFICOS do K8s (que contêm dados sensíveis e NÃO DEVEM SER VERSIONADOS)
+_manifests/base/f1data-db-secret.yaml # <--- CRÍTICO: Garante que este Secret NÃO seja enviado!
+
+# --- Django Specific ---
+local_settings.py # Arquivo comum para overrides de settings locais
+media/          # Media files (uploaded by users)
+
+# --- Kubernetes / Kustomize Specific ---
+# Kustomize build output directories (gerados, não fonte)
+# .build/
+# build/
+# kustomize-build/
+
+# --- Arquivos Temporários / Gerados Customizados ---
+/racecontrol.json # JSON grande da API que você salvou
+*.tmp
+*.temp
+*.bak
+*~
+.directory
+
+# --- macOS specific ---
+.DS_Store
+
+# --- Windows specific ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Node.js / React Specific ---
+node_modules/ 
+/F1Data_Web/node_modules/
+npm-debug.log* # Logs de debug do NPM
+.npm/                       # Cache do NPM
+.yarn-cache/                # Cache do Yarn
+.pnpm-store/                # Cache do PNPM
+
+# --- Kubernetes / Kustomize Specific ---
+# Kustomize build output directories (gerados, não fonte)
+.build/
+build/
+kustomize-build/

@@ -1,0 +1,24 @@
+# _manifests/overlays/prod/appserver-deployment-patch.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f1data-appserver-deployment
+spec:
+  replicas: 2 # Exemplo: 2 réplicas para produção
+  template:
+    spec:
+      containers:
+      - name: appserver
+        imagePullPolicy: IfNotPresent # Em produção, mudaria para 'Always' se usar registry
+        command: ["gunicorn", "--bind", "0.0.0.0:8000", "f1app_project.wsgi:application"] # Comando para PROD
+        env:
+        - name: DEBUG_MODE
+          value: "0" # Força DEBUG=False em produção
+        # Adicione limites de recursos para produção
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"

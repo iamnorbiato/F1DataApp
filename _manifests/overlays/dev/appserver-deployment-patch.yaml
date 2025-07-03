@@ -1,0 +1,15 @@
+# _manifests/overlays/dev/appserver-deployment-patch.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f1data-appserver-deployment
+spec:
+  template:
+    spec:
+      containers:
+      - name: appserver
+        imagePullPolicy: IfNotPresent # Força o uso da imagem local no Docker Desktop
+        # Adicione aqui um patch para DEBUG_MODE se for necessário
+        env:
+        - name: DEBUG_MODE
+          value: "1" # Força DEBUG=True em desenvolvimento

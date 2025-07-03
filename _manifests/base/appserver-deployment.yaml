@@ -1,0 +1,53 @@
+# _manifests/base/appserver-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f1data-appserver-deployment
+  namespace: default # Será sobrescrito para 'f1data' pelo Kustomize em overlays
+  labels:
+    app: f1data
+    tier: appserver
+spec:
+  replicas: 1 # Uma réplica para desenvolvimento
+  selector:
+    matchLabels:
+      app: f1data
+      tier: appserver
+  template:
+    metadata:
+      labels:
+        app: f1data
+        tier: appserver
+    spec:
+      containers:
+      - name: appserver
+        image: f1data-appserver:latest # Sua imagem Docker
+        imagePullPolicy: IfNotPresent # Puxa se não presente, usa local se sim (bom para dev)
+        ports:
+        - containerPort: 8000  # Porta que o Django expõe
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: f1data-config
+              key: DATABASE_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: f1data-config
+              key: DATABASE_PORT
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: f1data-config
+              key: DATABASE_USER
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: f1data-config
+              key: DATABASE_NAME
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: f1data-db-secret
+              key: db_password

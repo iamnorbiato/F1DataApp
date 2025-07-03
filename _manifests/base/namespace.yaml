@@ -1,0 +1,5 @@
+# _manifests/base/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: f1data # O nome do namespace que será criado

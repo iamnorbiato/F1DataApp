@@ -1,0 +1,21 @@
+# webserver-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: f1data-webserver-service # Nome do Service
+  namespace: default # Kustomize vai sobrescrever para f1data
+  labels:
+    app: f1data
+    tier: webserver
+spec:
+  selector:
+    app: f1data
+    tier: webserver # Seleciona os pods do deployment do webserver
+  ports:
+    - protocol: TCP
+      port: 80 # Porta que o Service irá expor dentro do cluster (Nginx)
+      targetPort: 80 # A porta que o Nginx está ouvindo no contêiner
+      nodePort: 30080 # Opcional: Porta específica no Node (e mapeada pelo Docker Desktop)
+                      # Se não especificado, o K8s aloca uma porta aleatória (30000-32767)
+                      # Usaremos 30080 aqui para ser mais fácil de lembrar e evitar 80/8080 diretos no host.
+  type: NodePort # Permite acesso externo ao cluster através do IP do Node e da porta NodePort

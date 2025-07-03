@@ -1,0 +1,19 @@
+# appserver-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: f1data-appserver-service # Nome do Service para que outros pods possam encontrá-lo
+  namespace: default # Kustomize vai sobrescrever para f1data
+  labels:
+    app: f1data
+    tier: appserver
+spec:
+  selector:
+    app: f1data
+    tier: appserver # Seleciona os pods do deployment do appserver
+  ports:
+    - protocol: TCP
+      port: 80 # Porta que o Service irá expor dentro do cluster
+      targetPort: 8000 # Porta que o container do appserver está ouvindo (Django)
+      nodePort: 30081
+  type: NodePort #type: ClusterIP # Este tipo de Service é acessível apenas dentro do cluster

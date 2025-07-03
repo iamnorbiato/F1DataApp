@@ -1,0 +1,13 @@
+# _manifests/overlays/dev/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Aponta para a base
+bases:
+- ../../base
+
+# Define o namespace para este overlay (se quiser diferente da base ou forçá-lo)
+namespace: f1data
+
+patchesStrategicMerge:
+- appserver-deployment-patch.yaml

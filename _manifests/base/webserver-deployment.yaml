@@ -1,0 +1,35 @@
+# _manifests/base/webserver-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f1data-webserver-deployment # Nome do Deployment
+  namespace: default # Será sobrescrito para 'f1data' pelo Kustomize em overlays
+  labels:
+    app: f1data
+    tier: webserver
+spec:
+  replicas: 1 # Uma réplica é suficiente para desenvolvimento local
+  selector:
+    matchLabels:
+      app: f1data
+      tier: webserver
+  template:
+    metadata:
+      labels:
+        app: f1data
+        tier: webserver
+    spec:
+      containers:
+      - name: webserver # Nome do contêiner (Nginx)
+        image: f1data-webserver:latest # Sua imagem Docker do Nginx puro
+        imagePullPolicy: IfNotPresent # Ideal para desenvolvimento local. Puxa se não existe, usa a local se sim.
+                                     # Se você quer garantir sempre a versão mais nova (útil com "latest"),
+                                     # pode usar 'Always', mas 'IfNotPresent' geralmente funciona bem com Docker Desktop.
+        ports:
+        - containerPort: 80 # A porta que o Nginx está expondo INTERNAMENTE no contêiner
+        # Observações importantes para esta arquitetura:
+        # - NÃO é necessário volume mount para o código React aqui.
+        # - O 'npm start' (servidor de desenvolvimento React) roda na sua máquina HOST (Windows).
+        # - O Nginx dentro deste contêiner fará o proxy das requisições para o 'npm start' na host
+        #   e para o serviço do AppServer no Kubernetes.
+        # - A configuração de proxy (nginx.conf) é copiada para a imagem Nginx no Dockerfile.
