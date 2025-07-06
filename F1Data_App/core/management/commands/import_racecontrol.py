@@ -7,6 +7,7 @@ import time # Para o sleep da API
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
+from django.conf import settings
 
 # Importa os modelos RaceControl
 from core.models import RaceControl, Meetings, Sessions # Incluí Meetings e Sessions para get_meeting_keys_to_process se for usado
@@ -21,35 +22,8 @@ class Command(BaseCommand):
     help = 'Importa dados de controle de corrida (race_control) da API OpenF1 e os insere na tabela racecontrol do PostgreSQL usando ORM.'
 
     API_URL = "https://api.openf1.org/v1/race_control" # URL da API para race_control
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json') # Caminho para o arquivo de config
 
     API_DELAY_SECONDS = 0.2 # <--- ADICIONADO: Delay de 0.2 segundos entre as chamadas da API (ajuste conforme necessário)
-
-    def get_config_value(self, key=None, default=None, section=None):
-        config = {}
-        if not os.path.exists(self.CONFIG_FILE):
-            self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
-            return default
-        try:
-            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-
-            if section:
-                section_data = config.get(section, default if key is None else {})
-                if key is None:
-                    return section_data
-                else:
-                    return section_data.get(key, default)
-            else:
-                if key is None:
-                    return config
-                else:
-                    return config.get(key, default)
-
-        except json.JSONDecodeError as e:
-            raise CommandError(f"Erro ao ler/parsear o arquivo de configuração JSON '{self.CONFIG_FILE}': {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
 
     def get_last_processed_meeting_key_from_racecontrol(self):
         self.stdout.write(self.style.MIGRATE_HEADING("Verificando o último meeting_key processado na tabela 'racecontrol'..."))

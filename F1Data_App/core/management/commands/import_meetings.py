@@ -7,6 +7,7 @@ import time # Para o sleep da API
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
+from django.conf import settings
 
 from core.models import Meetings
 from dotenv import load_dotenv 
@@ -112,13 +113,13 @@ class Command(BaseCommand):
             circuit_key = meeting_data.get('circuit_key')
             circuit_short_name = meeting_data.get('circuit_short_name')
             date_start_str = meeting_data.get('date_start')
-            date_end_str = meeting_data.get('date_end')
+#            date_end_str = meeting_data.get('date_end')
             gmt_offset = meeting_data.get('gmt_offset')
             meeting_official_name = meeting_data.get('meeting_official_name')
             year = meeting_data.get('year')
 
             date_start_obj = datetime.fromisoformat(date_start_str.replace('Z', '+00:00')) if date_start_str else None
-            date_end_obj = datetime.fromisoformat(date_end_str.replace('Z', '+00:00')) if date_end_str else None
+#           date_end_obj = datetime.fromisoformat(date_end_str.replace('Z', '+00:00')) if date_end_str else None
 
             Meetings.objects.create(
                 meeting_key=meeting_key,
@@ -130,7 +131,7 @@ class Command(BaseCommand):
                 circuit_key=circuit_key,
                 circuit_short_name=circuit_short_name,
                 date_start=date_start_obj,
-                date_end=date_end_obj,
+#                date_end=date_end_obj,
                 gmt_offset=gmt_offset,
                 meeting_official_name=meeting_official_name,
                 year=year

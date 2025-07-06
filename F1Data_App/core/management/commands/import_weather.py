@@ -1,60 +1,40 @@
 # G:\Learning\F1Data\F1Data_App\core\management\commands\import_weather.py
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import os
-import time # Para o sleep da API
+import time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
+from django.conf import settings 
 
 # Importa os modelos necessários
-from core.models import Sessions, Weather # Precisamos de Sessions para obter os pares (meeting_key, session_key)
-from dotenv import load_dotenv # Para carregar variáveis do .env
-from update_token import update_api_token_if_needed # Para verificar/renovar o token da API
+from core.models import Sessions, Weather 
+from dotenv import load_dotenv 
+from update_token import update_api_token_if_needed 
+import pytz # Para manipulação de fusos horários
 
-# --- CORREÇÃO AQUI: Usa settings.BASE_DIR para o caminho do env.cfg ---
-ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
-# -----------------------------------------------------------------------
+ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') 
 
 class Command(BaseCommand):
     help = 'Importa dados de clima (weather) da API OpenF1 e os insere na tabela weather do PostgreSQL usando ORM.'
 
-    API_URL = "https://api.openf1.org/v1/weather" # URL da API para weather
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json') # Caminho para o arquivo de config
+    API_URL = "https://api.openf1.org/v1/weather" 
+    # CONFIG_FILE removido, pois não estamos usando import_config.json
+    # CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json') # REMOVIDO
 
-    API_DELAY_SECONDS = 0.2 # <--- Adicionado: Delay de 0.2 segundos entre as chamadas da API (ajuste conforme necessário)
+    API_DELAY_SECONDS = 0.2 # <--- Ajustado de volta para 0.2, como padrão
+    API_MAX_RETRIES = 3 # Adicionado para consistência
+    API_RETRY_DELAY_SECONDS = 5 # Adicionado para consistência
 
-    def get_config_value(self, key=None, default=None, section=None):
-        """
-        Lê um valor de configuração de um arquivo JSON.
-        Se 'key' for None e 'section' for fornecido, retorna o dicionário completo da seção.
-        Assume que o arquivo está na mesma pasta do script.
-        """
-        config = {}
-        if not os.path.exists(self.CONFIG_FILE):
-            self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
-            return default
-        try:
-            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+    warnings_count = 0 # <--- ADICIONADO: Contador de avisos na classe
+    all_warnings_details = [] # <--- ADICIONADO: Lista para detalhes de avisos
 
-            if section:
-                section_data = config.get(section, default if key is None else {})
-                if key is None:
-                    return section_data
-                else:
-                    return section_data.get(key, default)
-            else:
-                if key is None:
-                    return config
-                else:
-                    return config.get(key, default)
-
-        except json.JSONDecodeError as e:
-            raise CommandError(f"Erro ao ler/parsear o arquivo de configuração JSON '{self.CONFIG_FILE}': {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
+    def add_warning(self, message): # <--- ADICIONADO: Método para adicionar avisos
+        self.warnings_count += 1
+        self.all_warnings_details.append(message)
+        self.stdout.write(self.style.WARNING(message))
 
     def get_meeting_session_pairs_to_process(self):
         """
@@ -63,7 +43,7 @@ class Command(BaseCommand):
         Retorna uma lista de tuplas (meeting_key, session_key) a serem processadas.
         """
         self.stdout.write(self.style.MIGRATE_HEADING("Identificando pares (meeting_key, session_key) a processar para weather..."))
-
+        
         # Obter todos os pares (meeting_key, session_key) da tabela 'sessions'
         self.stdout.write("Buscando todos os pares (meeting_key, session_key) da tabela 'sessions'...")
         all_session_pairs = set(
@@ -81,11 +61,11 @@ class Command(BaseCommand):
         # Calcular a diferença: pares em 'sessions' mas não em 'weather'
         # ORDENADO para processamento consistente
         pairs_to_process = sorted(list(all_session_pairs - existing_weather_pairs))
-
+        
         self.stdout.write(self.style.SUCCESS(f"Identificados {len(pairs_to_process)} pares (meeting_key, session_key) que precisam de dados de weather."))
         return pairs_to_process
 
-    def fetch_weather_data(self, meeting_key, session_key, use_token=True): # <--- Adicionado use_token
+    def fetch_weather_data(self, meeting_key, session_key, use_token=True):
         """
         Busca os dados de clima da API OpenF1 para um par (meeting_key, session_key) específico.
         meeting_key: A chave do meeting para filtrar a busca.
@@ -104,12 +84,12 @@ class Command(BaseCommand):
         if use_token:
             api_token = os.getenv('OPENF1_API_TOKEN')
             if not api_token:
-                self.warnings_count += 1
+                self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.") # Usando add_warning
                 raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
             else:
                 headers["Authorization"] = f"Bearer {api_token}"
         else:
-            # A mensagem geral de desativação do token será controlada no handle()
+            self.add_warning("Uso do token desativado (use_token=False). Requisição será feita sem Authorization.") # Usando add_warning
             pass 
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"Buscando dados de weather para meeting_key {meeting_key}, session_key {session_key} da API: {url}"))
@@ -118,7 +98,9 @@ class Command(BaseCommand):
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            raise CommandError(f"Erro ao buscar dados de weather da API ({url}): {e}")
+            return {"error_status": getattr(response, 'status_code', 'Unknown'), 
+                    "error_url": url, 
+                    "error_message": str(e)}
 
     def insert_weather_entry(self, weather_data):
         """
@@ -179,7 +161,10 @@ class Command(BaseCommand):
             raise # Re-levanta o erro para o handle() capturá-lo e fazer rollback
 
     def handle(self, *args, **options):
-        load_dotenv() # Carrega as variáveis do .env
+        load_dotenv(dotenv_path=ENV_FILE_PATH) 
+
+        self.warnings_count = 0 
+        self.all_warnings_details = [] # Zera a lista de detalhes de avisos para esta execução
 
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true' # Lê a flag do .env
 
@@ -189,7 +174,7 @@ class Command(BaseCommand):
             except Exception as e:
                 raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}. Não é possível prosseguir com a importação.")
         else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no .env). Buscando dados históricos."))
+            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg). Buscando dados históricos."))
 
         self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Weather (ORM)..."))
 
@@ -211,41 +196,40 @@ class Command(BaseCommand):
             api_delay = self.API_DELAY_SECONDS 
 
             # Inicia uma transação de banco de dados
-            # A transação atomic() está agora DENTRO DO LOOP FOR para atomicity por item
-            for i, (meeting_key, session_key) in enumerate(pairs_to_process):
-                try: # Este try encapsula a transação atômica para UM PAR (MEETING, SESSION)
-                    with transaction.atomic(): # Transação atômica por CADA PAR
-                        # Mostra progresso para cada par processado (se necessário)
-                        self.stdout.write(f"Processando par {i+1}/{len(pairs_to_process)}: meeting_key={meeting_key}, session_key={session_key}...")
-                        pairs_processed_count += 1
+            with transaction.atomic(): # Usa a transação atômica do Django
+                for i, (meeting_key, session_key) in enumerate(pairs_to_process):
+                    # Mostra progresso para cada par processado
+                    self.stdout.write(f"Processando par {i+1}/{len(pairs_to_process)}: meeting_key={meeting_key}, session_key={session_key}...")
+                    pairs_processed_count += 1
 
-                        # 2. Buscar dados de weather para o par (meeting_key, session_key) atual da API
-                        weather_data_from_api = self.fetch_weather_data(meeting_key=meeting_key, session_key=session_key, use_token=use_api_token_flag)
+                    # 2. Buscar dados de weather para o par (meeting_key, session_key) atual da API
+                    weather_data_from_api = self.fetch_weather_data(meeting_key=meeting_key, session_key=session_key, use_token=use_api_token_flag) # Passa a flag
 
-                        if not weather_data_from_api:
-                            self.stdout.write(self.style.WARNING(f"Aviso: Nenhuma entrada de weather encontrada na API para meeting_key={meeting_key}, session_key={session_key}."))
-                            continue # Pula para o próximo par se não houver dados
+                    if isinstance(weather_data_from_api, dict) and "error_status" in weather_data_from_api:
+                        self.stdout.write(self.style.ERROR(f"  Erro na API para par (Mtg {meeting_key}, Sess {session_key}): {weather_data_from_api['error_message']}. Pulando este par."))
+                        self.add_warning(f"Erro API par (Mtg {meeting_key}, Sess {session_key}): {weather_data_from_api['error_message']}") # Adiciona ao detalhe
+                        continue 
 
-                        # self.stdout.write(f"Encontradas {len(weather_data_from_api)} entradas para meeting_key={meeting_key}, session_key={session_key}. Inserindo...") # Removido para output limpo
-
-                        # 3. Inserir cada entrada no DB
-                        for weather_entry in weather_data_from_api:
-                            try: # Este try-except interno é para lidar com erros de UMA entrada e continuar as outras (dentro do atomic)
-                                inserted = self.insert_weather_entry(weather_entry)
-                                if inserted is True:
-                                    weather_entries_inserted_db += 1
-                                elif inserted is False:
-                                    weather_entries_skipped_db += 1
-                            except Exception as weather_insert_e:
-                                self.stdout.write(self.style.ERROR(f"Erro ao processar/inserir UMA ENTRADA de weather para meeting_key={meeting_key}, session_key={session_key}: {weather_insert_e}. Pulando para a próxima entrada."))
+                    if not weather_data_from_api:
+                        self.stdout.write(self.style.WARNING(f"  Aviso: Nenhuma entrada de weather encontrada na API para meeting_key={meeting_key}, session_key={session_key}."))
+                        self.add_warning(f"Aviso: API vazia para par (Mtg {meeting_key}, Sess {session_key}).") # Adiciona ao detalhe
+                        continue
+                    
+                    # 3. Inserir cada entrada no DB
+                    for weather_entry in weather_data_from_api:
+                        try: # Este try-except interno é para lidar com erros de UMA entrada e continuar os outros
+                            inserted = self.insert_weather_entry(weather_entry)
+                            if inserted is True:
+                                weather_entries_inserted_db += 1
+                            elif inserted is False:
+                                weather_entries_skipped_db += 1
+                        except Exception as weather_insert_e:
+                            self.stdout.write(self.style.ERROR(f"Erro ao processar/inserir UMA ENTRADA de weather para meeting_key={meeting_key}, session_key={session_key}: {weather_insert_e}. Pulando para o próximo registro."))
+                            self.add_warning(f"Erro inserir Weather (Mtg {meeting_key}, Sess {session_key}): {weather_insert_e}") # Adiciona ao detalhe
 
                     # Adiciona um delay APÓS cada chamada de API (loop do par meeting_key/session_key)
                     if api_delay > 0:
                         time.sleep(api_delay)
-
-                except Exception as pair_process_e: # Captura erros de processamento do PAR (API call, ou loop interno)
-                    self.stdout.write(self.style.ERROR(f"Erro ao processar par (Mtg {meeting_key}, Sess {session_key}): {pair_process_e}. Este par não foi processado por completo. Pulando para o próximo par."))
-                    # A transação já foi desfeita pelo atomic() interno se um erro fatal ocorreu nele.
 
 
             self.stdout.write(self.style.SUCCESS("Importação de Weather concluída com sucesso para todos os pares elegíveis!"))
@@ -255,10 +239,14 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f"Erro inesperado durante a importação de Weather (ORM): {e}")
         finally:
-            # Sumário final
             self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo da Importação de Weather (ORM) ---"))
             self.stdout.write(self.style.SUCCESS(f"Pares (meeting_key, session_key) processados: {pairs_processed_count}"))
             self.stdout.write(self.style.SUCCESS(f"Registros inseridos no DB: {weather_entries_inserted_db}"))
             self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB): {weather_entries_skipped_db}"))
-            self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
-            self.stdout.write(self.style.SUCCESS("Importação de weather finalizada!"))
+            self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
+            if self.all_warnings_details:
+                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+                for warn_msg in self.all_warnings_details:
+                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
+                self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
+                self.stdout.write(self.style.SUCCESS("Importação de weather finalizada!"))

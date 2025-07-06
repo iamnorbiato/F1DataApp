@@ -1,5 +1,4 @@
 # G:\Learning\F1Data\F1Data_App\core\management\commands\import_sessions.py
-
 import requests
 import json
 from datetime import datetime, timezone, timedelta
@@ -8,47 +7,21 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
+from django.conf import settings 
 
-from core.models import Sessions
-from update_token import update_api_token_if_needed
-from dotenv import load_dotenv
+from core.models import Sessions 
+from dotenv import load_dotenv 
+from update_token import update_api_token_if_needed 
+import pytz 
 
-# --- CORREÇÃO AQUI: Usa settings.BASE_DIR para o caminho do env.cfg ---
-ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
-# -----------------------------------------------------------------------
+ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') 
 
 class Command(BaseCommand):
     help = 'Importa dados de sessões (eventos) da API OpenF1 e os insere na tabela sessions do PostgreSQL usando ORM.'
 
     API_URL = "https://api.openf1.org/v1/sessions"
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
     API_DELAY_SECONDS = 0.2
-
-    def get_config_value(self, key=None, default=None, section=None):
-        config = {}
-        if not os.path.exists(self.CONFIG_FILE):
-            self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
-            return default
-        try:
-            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-
-            if section:
-                section_data = config.get(section, default if key is None else {})
-                if key is None:
-                    return section_data
-                else:
-                    return section_data.get(key, default)
-            else:
-                if key is None:
-                    return config
-                else:
-                    return config.get(key, default)
-        except json.JSONDecodeError as e:
-            raise CommandError(f"Erro ao ler/parsear o arquivo de configuração JSON '{self.CONFIG_FILE}': {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
-
+    
     def get_last_processed_meeting_key_from_sessions(self):
         self.stdout.write(self.style.MIGRATE_HEADING("Verificando o último meeting_key processado na tabela 'sessions'..."))
         last_key = 0
@@ -72,8 +45,13 @@ class Command(BaseCommand):
         if use_token:
             api_token = os.getenv('OPENF1_API_TOKEN')
             if not api_token:
+                self.warnings_count += 1 # Contabiliza o aviso
                 raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado nas variáveis de ambiente. Verifique seu arquivo .env.")
             headers["Authorization"] = f"Bearer {api_token}"
+        else:
+            self.warnings_count += 1 # Contabiliza o aviso
+            # A mensagem geral de desativação do token é controlada no handle()
+            pass 
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"Buscando dados de sessões de evento da API: {url}"))
         try:
@@ -117,7 +95,7 @@ class Command(BaseCommand):
                     parts = [int(p) for p in gmt_offset_str.split(':')]
                     gmt_offset_obj = timedelta(hours=parts[0], minutes=parts[1], seconds=parts[2])
                 except Exception as e:
-                    self.stdout.write(self.style.WARNING(f"Aviso: Não foi possível parsear gmt_offset '{gmt_offset_str}': {e}"))
+                    self.add_warning(f"Aviso: Não foi possível parsear gmt_offset '{gmt_offset_str}': {e}")
 
             Sessions.objects.create(
                 meeting_key=meeting_key,
@@ -144,27 +122,32 @@ class Command(BaseCommand):
             raise
 
     def handle(self, *args, **options):
-        load_dotenv()
+        load_dotenv(dotenv_path=ENV_FILE_PATH)
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.warnings_count += 1
-                raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        self.warnings_count = 0
+        self.all_warnings_details = [] # Zera a lista de detalhes de avisos para esta execução
+
+        use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true' # <--- DEFINIÇÃO DA VARIÁVEL
+
+        if use_api_token_flag:
+            try:
+                update_api_token_if_needed()
+            except Exception as e:
+                raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}. Não é possível prosseguir com a importação.")
         else:
-            # A mensagem geral de desativação do token será controlada no handle()
-            pass 
+            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg). Buscando dados históricos."))
 
         self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Sessões de Evento (ORM)..."))
 
         sessions_found_api = 0
         sessions_inserted_db = 0
         sessions_skipped_db = 0
+        total_race_session_driver_triplets_eligible = 0 # Variável para o sumário final
+        sessions_api_calls_processed_count = 0 # Variável para o sumário final
 
         try:
             last_meeting_key_in_sessions_table = self.get_last_processed_meeting_key_from_sessions()
+            # Passa use_token para fetch_sessions_data
             all_sessions_from_api = self.fetch_sessions_data(min_meeting_key=last_meeting_key_in_sessions_table, use_token=use_api_token_flag)
             sessions_found_api = len(all_sessions_from_api)
             sessions_to_process = all_sessions_from_api
@@ -176,13 +159,16 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.NOTICE("Nenhuma nova sessão de evento encontrada para importar. Encerrando."))
                 return
 
+            api_delay = self.API_DELAY_SECONDS 
+
             for i, session_entry in enumerate(sessions_to_process):
                 try:
                     with transaction.atomic():
-                        if (i + 1) % 10 == 0 or (i + 1) == len(sessions_to_process):
-                            meeting_key_debug = session_entry.get('meeting_key', 'N/A')
-                            session_key_debug = session_entry.get('session_key', 'N/A')
-                            self.stdout.write(f"Processando sessão de evento {i+1}/{len(sessions_to_process)} (Mtg {meeting_key_debug}, Sess {session_key_debug})...")
+                        # Remover a mensagem de progresso linha a linha
+                        # if (i + 1) % 10 == 0 or (i + 1) == len(sessions_to_process):
+                        #     meeting_key_debug = session_entry.get('meeting_key', 'N/A')
+                        #     session_key_debug = session_entry.get('session_key', 'N/A')
+                        #     self.stdout.write(f"Processando sessão de evento {i+1}/{len(sessions_to_process)} (Mtg {meeting_key_debug}, Sess {session_key_debug})...")
 
                         inserted = self.insert_session_entry(session_entry)
                         if inserted is True:
@@ -190,9 +176,9 @@ class Command(BaseCommand):
                         elif inserted is False:
                             sessions_skipped_db += 1
                 except Exception as session_atomic_e:
-                    self.stdout.write(self.style.ERROR(
+                    self.add_warning(
                         f"Erro FATAL na transação para sessão de evento (Mtg {session_entry.get('meeting_key', 'N/A')}, Sess {session_entry.get('session_key', 'N/A')}): {session_atomic_e}. Este item não foi inserido/atualizado."
-                    ))
+                    )
 
                 if self.API_DELAY_SECONDS > 0:
                     time.sleep(self.API_DELAY_SECONDS)
@@ -209,5 +195,10 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Sessões novas a serem inseridas: {len(sessions_to_process)}"))
             self.stdout.write(self.style.SUCCESS(f"Sessões inseridas no DB: {sessions_inserted_db}"))
             self.stdout.write(self.style.NOTICE(f"Sessões ignoradas (já existiam no DB): {sessions_skipped_db}"))
-            self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
-            self.stdout.write(self.style.SUCCESS("Importação de sessões de evento finalizada!"))
+            self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
+            if self.all_warnings_details:
+                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+                for warn_msg in self.all_warnings_details:
+                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
+                self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
+                self.stdout.write(self.style.SUCCESS("Importação de sessões de evento finalizada!"))

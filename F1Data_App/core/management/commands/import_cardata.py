@@ -7,7 +7,7 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import OperationalError, IntegrityError, transaction
-from django.conf import settings
+from django.conf import settings # Importado para settings.BASE_DIR
 
 from core.models import Sessions, Drivers, CarData
 from dotenv import load_dotenv
@@ -19,12 +19,20 @@ class Command(BaseCommand):
     help = 'Importa dados de telemetria (car_data) da API OpenF1 para o PostgreSQL de forma otimizada.'
 
     API_URL = "https://api.openf1.org/v1/car_data"
-#    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
+#    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json') # Removido
     API_DELAY_SECONDS = 0.2
 
     PRIMARY_N_GEAR_FILTER = "n_gear>0"
     FALLBACK_N_GEAR_FILTERS = ["n_gear>0&n_gear<=4", "n_gear>4"]
     BULK_SIZE = 5000
+
+    warnings_count = 0 # Adicionado para a classe
+    all_warnings_details = [] # Adicionado para a classe
+
+    def add_warning(self, message): # Adicionado o método para a classe
+        self.warnings_count += 1
+        self.all_warnings_details.append(message)
+        self.stdout.write(self.style.WARNING(message))
 
     def get_triplets_to_process(self):
         self.stdout.write(self.style.MIGRATE_HEADING("Identificando triplets a processar para car_data..."))
@@ -61,7 +69,9 @@ class Command(BaseCommand):
             if token:
                 headers["Authorization"] = f"Bearer {token}"
             else:
-                self.stdout.write(self.style.WARNING("Token da API não encontrado. Requisição sem Authorization."))
+                self.add_warning("Token da API não encontrado. Requisição será feita sem Authorization.") # Usando add_warning
+        else:
+            self.add_warning("Token desativado.") # Usando add_warning
 
         try:
             response = requests.get(url, headers=headers)
@@ -89,18 +99,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        load_dotenv()
+        load_dotenv(dotenv_path=ENV_FILE_PATH) # Passando o caminho explícito
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.warnings_count += 1
-                raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        self.warnings_count = 0 # Zera o contador de avisos
+        self.all_warnings_details = [] # Zera a lista de detalhes de avisos
+
+        use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true' # <--- DEFINIÇÃO DA VARIÁVEL
+
+        if use_api_token_flag:
+            try:
+                update_api_token_if_needed()
+            except Exception as e:
+                raise CommandError(f"Falha ao verificar/atualizar token: {e}")
         else:
-            # A mensagem geral de desativação do token será controlada no handle()
-            pass 
+            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg).")) # Mensagem única
 
         self.stdout.write(self.style.MIGRATE_HEADING("Iniciando importação de car_data..."))
         inserted, skipped, processed = 0, 0, 0
@@ -120,23 +132,23 @@ class Command(BaseCommand):
                 car_data = []
                 api_success = False
 
-                primary = self.fetch_cardata(meeting_key, session_key, driver_number, self.PRIMARY_N_GEAR_FILTER, use_token)
+                primary = self.fetch_cardata(meeting_key, session_key, driver_number, self.PRIMARY_N_GEAR_FILTER, use_token=use_api_token_flag) # Passando use_token
                 if isinstance(primary, list):
                     car_data.extend(primary)
                     api_success = True
                 elif isinstance(primary, dict) and primary.get("error_status") == 422:
-                    self.stdout.write(self.style.WARNING(f"422 Too Much Data. Tentando fallback para Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}"))
+                    self.add_warning(f"422 Too Much Data. Tentando fallback para Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}") # Usando add_warning
                     for fallback in self.FALLBACK_N_GEAR_FILTERS:
-                        fallback_resp = self.fetch_cardata(meeting_key, session_key, driver_number, fallback, use_token)
+                        fallback_resp = self.fetch_cardata(meeting_key, session_key, driver_number, fallback, use_token=use_api_token_flag) # Passando use_token
                         if isinstance(fallback_resp, list):
                             car_data.extend(fallback_resp)
                             api_success = True
                             if self.API_DELAY_SECONDS > 0:
                                 time.sleep(self.API_DELAY_SECONDS)
                         else:
-                            self.stdout.write(self.style.WARNING(f"Fallback '{fallback}' falhou: {fallback_resp.get('error_message')}"))
+                            self.add_warning(f"Fallback '{fallback}' falhou: {fallback_resp.get('error_message')}") # Usando add_warning
                 elif isinstance(primary, dict):
-                    self.stdout.write(self.style.ERROR(f"Erro API: {primary.get('error_status')} - {primary.get('error_message')}"))
+                    self.add_warning(f"Erro API: {primary.get('error_status')} - {primary.get('error_message')}") # Usando add_warning
                     continue
 
                 if api_success and car_data:
@@ -146,14 +158,14 @@ class Command(BaseCommand):
                             obj = self.build_cardata_instance(entry)
                             objects.append(obj)
                         except Exception as e:
-                            self.stdout.write(self.style.ERROR(f"Erro ao construir entrada: {e}"))
+                            self.add_warning(f"Erro ao construir entrada: {e}") # Usando add_warning
 
                     try:
                         with transaction.atomic():
                             CarData.objects.bulk_create(objects, batch_size=self.BULK_SIZE, ignore_conflicts=True)
                             inserted += len(objects)
                     except Exception as e:
-                        self.stdout.write(self.style.ERROR(f"Erro no bulk_create: {e}"))
+                        self.add_warning(f"Erro no bulk_create: {e}") # Usando add_warning
 
                 if self.API_DELAY_SECONDS > 0:
                     time.sleep(self.API_DELAY_SECONDS)
@@ -166,4 +178,10 @@ class Command(BaseCommand):
             self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo da Importação ---"))
             self.stdout.write(self.style.SUCCESS(f"Triplets processados: {processed}"))
             self.stdout.write(self.style.SUCCESS(f"Registros inseridos (aprox.): {inserted}"))
-            self.stdout.write(self.style.SUCCESS("Importação concluída."))
+            self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam): {skipped}"))
+            self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
+            if self.all_warnings_details:
+                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+                for warn_msg in self.all_warnings_details:
+                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
+            self.stdout.write(self.style.SUCCESS("Importação finalizada."))

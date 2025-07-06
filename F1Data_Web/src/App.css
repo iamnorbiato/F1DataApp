@@ -1,38 +1,307 @@
+/* G:\Learning\F1Data\F1Data_Web\src\App.css */
+
+/* --- SEU @font-face CORRIGIDO - MANTIDO NO TOPO --- */
+@font-face {
+  font-family: 'Formula1 Display Bold';
+  src: url('./assets/fonts/Formula1-Bold.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+/* --- FIM DO BLOCO @font-face --- */
+
+
+/* Variáveis CSS para cores (baseado na imagem do layout desejado) */
+:root {
+  --primary-dark-bg: #1a1a1a; /* Fundo principal escuro */
+  --secondary-dark-bg: #2a2a2a; /* Fundo dos cards/quadrantes */
+  --sidebar-bg: #111111; /* Fundo sidebar mais escuro ainda */
+  --text-light: #ffffff; /* Texto claro */
+  --text-medium: #bbbbbb; /* Texto médio */
+  --accent-green: #00ff00; /* Verde vibrante para destaques */
+  --button-bg: #444444; /* Botões neutros */
+  --button-hover: #555555;
+  --border-color: #3a3a3a; /* Bordas e divisores */
+  --shadow-color: rgba(0,0,0,0.5); /* Sombra escura */
+}
+
+body {
+  margin: 0;
+  font-family: 'Formula1 Display Bold', sans-serif; /* Aplica a fonte personalizada */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--primary-dark-bg); /* Fundo escuro */
+  color: var(--text-light); /* Texto principal claro */
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Container principal da aplicação */
 .App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
+  display: flex;
   min-height: 100vh;
+  overflow: hidden;
+  background-color: var(--primary-dark-bg); 
+  border-radius: 12px; 
+  box-shadow: 0 4px 10px var(--shadow-color);
+  margin: 15px; /* Margem externa para destacar o App na tela */
+}
+
+/* Sidebar */
+.sidebar-container {
+  width: 250px; 
+  background-color: var(--sidebar-bg); /* Fundo sidebar mais escuro */
+  color: var(--text-light);
+  padding: 20px;
   display: flex;
   flex-direction: column;
+  box-shadow: 2px 0 5px var(--shadow-color);
+  z-index: 10;
+  border-radius: 8px; 
+  margin: 15px; 
+  height: fit-content; 
+}
+
+.sidebar-container h2 {
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 1.8em;
+  color: var(--accent-green); /* Título em verde */
+}
+
+.menu-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1; 
+}
+
+.menu-item-wrapper {
+  position: relative;
+  margin-bottom: 10px; 
+}
+
+.menu-item-button {
+  background-color: var(--button-bg); /* Botão neutro */
+  color: var(--text-light);
+  border: none;
+  padding: 12px 15px;
+  text-align: left;
+  width: 100%;
+  border-radius: 8px; 
+  cursor: pointer;
+  font-size: 1.1em;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 2px 4px var(--shadow-color);
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  justify-content: center; 
+  gap: 10px;
 }
 
-.App-link {
-  color: #61dafb;
+.menu-item-button:hover {
+  background-color: var(--button-hover);
+  transform: translateY(-2px);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.menu-item-button.active {
+  background-color: var(--accent-green); /* Botão ativo em verde */
+  color: var(--primary-dark-bg); /* Texto escuro no botão verde */
+  font-weight: bold;
+  box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+/* Main Content (Container principal à direita da sidebar) */
+.main-content-container {
+  flex-grow: 1; 
+  padding: 20px;
+  background-color: var(--primary-dark-bg); /* Fundo principal escuro */
+  display: flex; 
+  flex-wrap: wrap; 
+  align-content: flex-start; 
+  box-sizing: border-box; 
+}
+
+.welcome-message {
+    width: 100%; 
+    text-align: center;
+    padding: 50px;
+    color: var(--text-light);
+    font-size: 1.2em;
+}
+
+.welcome-message h1 {
+    color: var(--accent-green); /* Título em verde */
+    font-size: 2.5em;
+    margin-bottom: 15px;
+}
+
+/* Estilos para o OptionChooserFrame (o popup de seleção) */
+.option-chooser-frame {
+  position: absolute;
+  background-color: var(--secondary-dark-bg); /* Fundo escuro */
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px var(--shadow-color);
+  padding: 20px;
+  z-index: 1000; 
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  opacity: 0; 
+  visibility: hidden; 
+  transform: translateY(-10px); 
+  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+}
+
+.option-chooser-frame.visible {
+  opacity: 1; 
+  visibility: visible; 
+  transform: translateY(0); 
+}
+
+.frame-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.frame-header h4 {
+  margin: 0;
+  color: var(--text-light); /* Texto claro */
+  font-size: 1.2em;
+}
+
+.frame-close-button {
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+  color: var(--text-medium);
+  transition: color 0.2s ease;
+}
+
+.frame-close-button:hover {
+  color: var(--danger-red);
+}
+
+.dropdown-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dropdown-group label {
+  font-weight: bold;
+  color: var(--text-medium); /* Label em tom médio */
+  font-size: 0.95em;
+}
+
+.dropdown-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: 1em;
+  background-color: var(--button-bg); /* Fundo do select */
+  color: var(--text-light); /* Texto do select */
+  cursor: pointer;
+}
+
+.dropdown-group select:focus {
+  border-color: var(--accent-green);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 255, 0, 0.2); /* Sombra verde */
+}
+
+.action-button-container {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.action-button {
+  background-color: var(--accent-green); 
+  color: var(--primary-dark-bg); /* Texto escuro no botão verde */
+  border: none;
+  padding: 12px 25px;
+  border-radius: 5px;
+  font-size: 1.1em;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.action-button:hover {
+  background-color: #00cc00; /* Verde um pouco mais escuro no hover */
+  transform: translateY(-2px);
+}
+
+/* --- Layout para os Quadrantes (Container da Grid) --- */
+.main-content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Duas colunas para 2x2 */
+    grid-template-rows: 1fr 1fr; /* Duas linhas para 2x2 */
+    gap: 20px; 
+    padding: 20px; 
+    flex-grow: 1; 
+    align-items: start; 
+}
+
+/* Estilo base para todos os quadrantes individuais */
+.quadrant {
+    background-color: var(--secondary-dark-bg); /* Fundo dos cards/quadrantes */
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 250px; 
+    position: relative; 
+    color: var(--text-light); /* Texto dos quadrantes claro */
+}
+
+.quadrant h3 {
+    text-align: center;
+    color: var(--accent-green); /* Título do quadrante em verde */
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.4em;
+    border-bottom: 2px solid var(--border-color); /* Borda inferior */
+    padding-bottom: 10px;
+}
+
+/* Estilos para o container único das sessões (dentro do Quadrante 1) */
+.sessions-container-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; 
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--primary-dark-bg); /* Fundo mais escuro para a caixa interna */
+    flex-grow: 1; 
+}
+
+.session-link-item {
+    background-color: var(--button-bg); /* Fundo de cada link */
+    border-radius: 5px;
+    padding: 10px 15px;
+    transition: background-color 0.2s ease;
+}
+
+.session-link-item:hover {
+    background-color: var(--button-hover);
+}
+
+.session-link-item a {
+    text-decoration: none;
+    color: var(--text-light); /* Texto do link claro */
+    font-weight: bold;
+    display: block; 
 }

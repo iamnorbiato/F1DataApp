@@ -254,18 +254,18 @@ class Pit(models.Model):
     # session_key é o primeiro campo da PK composta no DDL, então o usamos como primary_key=True para o Django
     session_key = models.IntegerField(primary_key=True) # NOT NULL na PK composta
     meeting_key = models.IntegerField() # NOT NULL na PK composta
-    driver_number = models.IntegerField() # NOT NULL na PK composta
+    driver_number = models.IntegerField(null=True, blank=True) 
     lap_number = models.IntegerField() # NOT NULL na PK composta
 
     # Outros campos
-    date = models.DateTimeField(null=True, blank=True) # "date" é um campo DateTimeField e pode ser NULL
+    date = models.DateTimeField() # NOT NULL na PK composta
     pit_duration = models.DecimalField(max_digits=8, decimal_places=3, null=True, blank=True) # Numeric(8,3) e pode ser NULL
 
     class Meta:
         managed = False  # Django NÃO vai gerenciar a criação/alteração desta tabela
         db_table = 'pit'  # Nome exato da tabela no banco de dados
         # Define a chave primária composta real para o banco de dados
-        unique_together = (('session_key', 'meeting_key', 'driver_number', 'lap_number'),)
+        unique_together = (('session_key', 'meeting_key', 'driver_number', 'date'),)
         verbose_name_plural = 'Pit' # Nome amigável para o admin do Django
 
     def __str__(self):

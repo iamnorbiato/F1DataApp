@@ -40,11 +40,13 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -87,9 +89,6 @@ DATABASES = {
     }
 }
 
-
-
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -130,3 +129,26 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    # Remova 'DEFAULT_PAGINATION_CLASS' e 'PAGE_SIZE' se você não for usar paginação genérica em outras APIs
+    # 'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # 'PAGE_SIZE': 100,
+    'DEFAULT_RENDERER_CLASSES': ( # <--- ADICIONADO: Para JSON puro
+        'rest_framework.renderers.JSONRenderer',
+        # 'rest_framework.renderers.BrowsableAPIRenderer', # Remova ou comente para não ter o HTML bonito
+    )
+}
+
+# Configurações de CORS (para desenvolvimento e acesso em rede local/externa)
+# ATENÇÃO: CORS_ALLOW_ALL_ORIGINS = True NÃO É SEGURO PARA PRODUÇÃO.
+# Em produção, você DEVE listar apenas as origens permitidas em CORS_ALLOWED_ORIGINS.
+CORS_ALLOW_ALL_ORIGINS = True # <--- ADICIONE/AJUSTE ESTA LINHA PARA 'True'
+# CORS_ALLOWED_ORIGINS = [ # <--- MANTENHA ESTA LINHA COMENTADA SE USAR CORS_ALLOW_ALL_ORIGINS = True
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+#     # Você adicionaria IPs específicos aqui se CORS_ALLOW_ALL_ORIGINS fosse False em dev/prod
+#     # Ex: "http://192.168.0.X:3000", # IP do seu Mac/outro PC na rede local
+#     # Ex: "http://SEU_IP_PUBLICO:30080", # Para acesso externo
+#     # Ex: "http://MEU_DOMINIO.COM", # Para domínio real
+# ]
