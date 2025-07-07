@@ -1,41 +1,40 @@
-// G:\Learning\F1Data\F1Data_Web\src\MainContent.js
+// G:\Learning\F1Data\F1Data_App\core\MainContent.js
 import React from 'react';
 import Quadrant1Sessions from './Quadrant1Sessions'; 
 
 function MainContent({ meetingKey, meetingOfficialName }) {
   return (
     <div className="main-content-grid"> {/* Grid para os 4 quadrantes */}
-
+      
       {/* Quadrante 1: Superior Esquerdo - Para Sessions */}
-      <div className="quadrant quadrant-1">
+      <div className="quadrant q1-sessions">
         <div className="quadrant-content-box">
-          <h3>Sessões do Evento: {meetingOfficialName} ({meetingKey})</h3>
-          {/* Aqui o componente Quadrant1Sessions vai carregar e exibir os dados */}
+          <h3>{meetingOfficialName}</h3> 
           <Quadrant1Sessions meetingKey={meetingKey} />
         </div>
       </div>
 
-      {/* Quadrante 2: Superior Direito (Placeholder) */}
-      <div className="quadrant quadrant-2">
+      {/* Quadrante 2: Superior Central (Placeholder) */}
+      <div className="quadrant q2-mock">
         <div className="quadrant-content-box">
-          <h3>Métricas da Frota (Q2)</h3>
-          <p>Conteúdo placeholder do Quadrante 2.</p>
+          <h3>Placeholder para 2ª Opção</h3>
+          <p>Conteúdo mockado do Quadrante Central Superior.</p>
         </div>
       </div>
 
-      {/* Quadrante 3: Inferior Direito (Placeholder) */}
-      <div className="quadrant quadrant-3">
+      {/* Quadrante 3: Superior Direito (Placeholder) */}
+      <div className="quadrant q3-mock">
         <div className="quadrant-content-box">
-          <h3>Desempenho por Piloto (Q3)</h3>
-          <p>Conteúdo placeholder do Quadrante 3.</p>
+          <h3>Placeholder para 3ª Opção</h3>
+          <p>Conteúdo mockado do Quadrante Superior Direito.</p>
         </div>
       </div>
 
-      {/* Quadrante 4: Inferior Esquerdo (Placeholder) */}
-      <div className="quadrant quadrant-4">
+      {/* Quadrante 4: Inferior (Placeholder) */}
+      <div className="quadrant q4-details">
         <div className="quadrant-content-box">
           <h3>Regras e Parâmetros (Q4)</h3>
-          <p>Conteúdo placeholder do Quadrante 4.</p>
+          <p>Conteúdo mockado do Quadrante Inferior (detalhes gerais).</p>
         </div>
       </div>
 

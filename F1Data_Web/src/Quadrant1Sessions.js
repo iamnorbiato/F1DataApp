@@ -44,13 +44,16 @@ function Quadrant1Sessions({ meetingKey }) {
   // Função auxiliar para formatar a data como "YYYY-MM-DD HH:MM:SS"
   const formatSessionDate = (dateString) => {
     if (!dateString) return 'N/A';
-    // Remove 'T' e o offset de fuso horário. Ex: "2024-03-01T13:00:00-03:00" -> "2024-03-01 13:00:00"
     const parts = dateString.split('T');
     if (parts.length > 1) {
-        const timePart = parts[1].split(/[+-Z]/)[0]; // Remove offset ou 'Z'
+        const timePart = parts[1].split(/[+-Z]/)[0];
         return `${parts[0]} ${timePart}`;
     }
-    return dateString.replace('Z', '').replace('T', ' '); // Fallback para outros formatos
+    return dateString.replace('Z', '').replace('T', ' '); 
+  };
+
+  const handleSessionClick = (sessionKey) => {
+      console.log(`Sessão clicada: ${sessionKey}`);
   };
 
   if (loading) {
@@ -64,15 +67,26 @@ function Quadrant1Sessions({ meetingKey }) {
   if (sessions.length === 0) {
     return <p>Nenhuma sessão encontrada para este meeting.</p>;
   }
-
   return (
-    <div className="sessions-container-box"> {/* Container único para todas as sessões */}
+    <div className="sessions-container-box no-bg">
+      <div className="session-table-header">
+        <span>Evento</span>
+        <span>Data</span>
+      </div>
+
       {sessions.map(session => (
-        <div key={session.session_key} className="session-link-item">
-          <a href={`#session-${session.session_key}`}>
-            {session.session_type} - {session.session_name} - {formatSessionDate(session.date_start)}
-          </a>
-        </div>
+        <a
+          key={session.session_key}
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            handleSessionClick(session.session_key);
+          }}
+          className="session-table-link-row"
+        >
+          <span>{session.session_name || 'N/A'}</span>
+          <span>{formatSessionDate(session.date_start)}</span>
+        </a>
       ))}
     </div>
   );

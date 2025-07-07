@@ -39,4 +39,4 @@ class SessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sessions
         # Campos específicos que você pediu, mais session_key
-        fields = ['session_key', 'date_start', 'session_name', 'circuit_short_name', 'session_type'] 
+        fields = ['session_key', 'date_start', 'session_name'] #, 'circuit_short_name']

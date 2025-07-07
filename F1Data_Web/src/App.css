@@ -1,37 +1,35 @@
 /* G:\Learning\F1Data\F1Data_Web\src\App.css */
 
-/* --- SEU @font-face CORRIGIDO - MANTIDO NO TOPO --- */
+:root {
+  --primary-dark-bg: #1a1a1a; 
+  --secondary-dark-bg: #2a2a2a; 
+  --sidebar-bg: #111111; 
+  --text-light: #ffffff; 
+  --text-medium: #bbbbbb; 
+  --accent-green: #00ff00; 
+  --button-bg: #444444; 
+  --button-hover: #555555;
+  --border-color: #3a3a3a; 
+  --shadow-color: rgba(0,0,0,0.5); 
+}
+
 @font-face {
   font-family: 'Formula1 Display Bold';
-  src: url('./assets/fonts/Formula1-Bold.ttf') format('truetype');
+  src: url('./assets/fonts/Formula1-Bold.ttf') format('truetype'); 
   font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
 /* --- FIM DO BLOCO @font-face --- */
 
-
-/* Variáveis CSS para cores (baseado na imagem do layout desejado) */
-:root {
-  --primary-dark-bg: #1a1a1a; /* Fundo principal escuro */
-  --secondary-dark-bg: #2a2a2a; /* Fundo dos cards/quadrantes */
-  --sidebar-bg: #111111; /* Fundo sidebar mais escuro ainda */
-  --text-light: #ffffff; /* Texto claro */
-  --text-medium: #bbbbbb; /* Texto médio */
-  --accent-green: #00ff00; /* Verde vibrante para destaques */
-  --button-bg: #444444; /* Botões neutros */
-  --button-hover: #555555;
-  --border-color: #3a3a3a; /* Bordas e divisores */
-  --shadow-color: rgba(0,0,0,0.5); /* Sombra escura */
-}
-
 body {
   margin: 0;
-  font-family: 'Formula1 Display Bold', sans-serif; /* Aplica a fonte personalizada */
+  font-family: 'Formula1 Display Bold', sans-serif; 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--primary-dark-bg); /* Fundo escuro */
-  color: var(--text-light); /* Texto principal claro */
+  background-color: var(--primary-dark-bg); 
+  color: var(--text-light); 
+  min-height: 100vh; 
 }
 
 code {
@@ -47,13 +45,13 @@ code {
   background-color: var(--primary-dark-bg); 
   border-radius: 12px; 
   box-shadow: 0 4px 10px var(--shadow-color);
-  margin: 15px; /* Margem externa para destacar o App na tela */
+  margin: 15px; 
 }
 
 /* Sidebar */
 .sidebar-container {
   width: 250px; 
-  background-color: var(--sidebar-bg); /* Fundo sidebar mais escuro */
+  background-color: var(--sidebar-bg); 
   color: var(--text-light);
   padding: 20px;
   display: flex;
@@ -68,8 +66,9 @@ code {
 .sidebar-container h2 {
   text-align: center;
   margin-bottom: 30px;
-  font-size: 1.8em;
-  color: var(--accent-green); /* Título em verde */
+  font-size: 1.0em;
+  color: var(--accent-green); 
+  font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .menu-list {
@@ -85,11 +84,11 @@ code {
 }
 
 .menu-item-button {
-  background-color: var(--button-bg); /* Botão neutro */
+  background-color: var(--button-bg); 
   color: var(--text-light);
   border: none;
   padding: 12px 15px;
-  text-align: left;
+  text-align: center; 
   width: 100%;
   border-radius: 8px; 
   cursor: pointer;
@@ -100,6 +99,7 @@ code {
   align-items: center;
   justify-content: center; 
   gap: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .menu-item-button:hover {
@@ -108,8 +108,8 @@ code {
 }
 
 .menu-item-button.active {
-  background-color: var(--accent-green); /* Botão ativo em verde */
-  color: var(--primary-dark-bg); /* Texto escuro no botão verde */
+  background-color: var(--accent-green); 
+  color: var(--primary-dark-bg); 
   font-weight: bold;
   box-shadow: 0 4px 8px var(--shadow-color);
 }
@@ -118,7 +118,7 @@ code {
 .main-content-container {
   flex-grow: 1; 
   padding: 20px;
-  background-color: var(--primary-dark-bg); /* Fundo principal escuro */
+  background-color: var(--primary-dark-bg); 
   display: flex; 
   flex-wrap: wrap; 
   align-content: flex-start; 
@@ -130,19 +130,21 @@ code {
     text-align: center;
     padding: 50px;
     color: var(--text-light);
-    font-size: 1.2em;
+    font-size: 0.8em;
+    font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .welcome-message h1 {
-    color: var(--accent-green); /* Título em verde */
+    color: var(--accent-green);
     font-size: 2.5em;
     margin-bottom: 15px;
+    font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 /* Estilos para o OptionChooserFrame (o popup de seleção) */
 .option-chooser-frame {
   position: absolute;
-  background-color: var(--secondary-dark-bg); /* Fundo escuro */
+  background-color: var(--secondary-dark-bg); 
   border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: 0 8px 16px var(--shadow-color);
@@ -155,6 +157,8 @@ code {
   visibility: hidden; 
   transform: translateY(-10px); 
   transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+  color: var(--text-light); 
+  font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .option-chooser-frame.visible {
@@ -167,28 +171,29 @@ code {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color); 
   padding-bottom: 10px;
   margin-bottom: 10px;
 }
 
 .frame-header h4 {
   margin: 0;
-  color: var(--text-light); /* Texto claro */
-  font-size: 1.2em;
+  color: var(--text-light); 
+  font-size: 0.8em;
+  font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .frame-close-button {
   background: none;
   border: none;
-  font-size: 1.5em;
+  font-size: 0.8em;
   cursor: pointer;
   color: var(--text-medium);
   transition: color 0.2s ease;
 }
 
 .frame-close-button:hover {
-  color: var(--danger-red);
+  color: var(--accent-green); 
 }
 
 .dropdown-group {
@@ -199,8 +204,9 @@ code {
 
 .dropdown-group label {
   font-weight: bold;
-  color: var(--text-medium); /* Label em tom médio */
+  color: var(--text-medium); 
   font-size: 0.95em;
+  font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .dropdown-group select {
@@ -208,16 +214,24 @@ code {
   padding: 10px;
   border: 1px solid var(--border-color);
   border-radius: 5px;
-  font-size: 1em;
-  background-color: var(--button-bg); /* Fundo do select */
-  color: var(--text-light); /* Texto do select */
+  font-size: 0.8em;
+  background-color: var(--button-bg); 
+  color: var(--text-light); 
   cursor: pointer;
+  -webkit-appearance: none; 
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cpath%20fill%3D%22%23bbbbbb%22%20d%3D%22M208.5%2C80.5L128%2C161l-80.5-80.5z%22%2F%3E%3C%2Fsvg%3E'); 
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 1em;
+  font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .dropdown-group select:focus {
   border-color: var(--accent-green);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(0, 255, 0, 0.2); /* Sombra verde */
+  box-shadow: 0 0 0 3px rgba(0, 255, 0, 0.2); 
 }
 
 .action-button-container {
@@ -226,36 +240,38 @@ code {
 }
 
 .action-button {
-  background-color: var(--accent-green); 
-  color: var(--primary-dark-bg); /* Texto escuro no botão verde */
-  border: none;
   padding: 12px 25px;
+  background-color: var(--accent-green); 
+  color: var(--primary-dark-bg); 
+  border: none;
   border-radius: 5px;
-  font-size: 1.1em;
+  font-size: 0.8em;
   cursor: pointer;
   transition: background-color 0.3s ease, transform 0.2s ease;
   box-shadow: 0 2px 4px var(--shadow-color);
+  font-family: 'Formula1 Display Bold', sans-serif; 
 }
 
 .action-button:hover {
-  background-color: #00cc00; /* Verde um pouco mais escuro no hover */
+  background-color: #00cc00; 
   transform: translateY(-2px);
 }
 
 /* --- Layout para os Quadrantes (Container da Grid) --- */
 .main-content-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* Duas colunas para 2x2 */
-    grid-template-rows: 1fr 1fr; /* Duas linhas para 2x2 */
+    grid-template-columns: repeat(3, 1fr); 
+    grid-template-rows: auto 1fr; 
     gap: 20px; 
     padding: 20px; 
     flex-grow: 1; 
     align-items: start; 
+    width: 100%; 
 }
 
 /* Estilo base para todos os quadrantes individuais */
 .quadrant {
-    background-color: var(--secondary-dark-bg); /* Fundo dos cards/quadrantes */
+    background-color: var(--secondary-dark-bg); 
     border-radius: 12px;
     box-shadow: 0 4px 12px var(--shadow-color);
     padding: 20px;
@@ -263,17 +279,39 @@ code {
     flex-direction: column;
     min-height: 250px; 
     position: relative; 
-    color: var(--text-light); /* Texto dos quadrantes claro */
+    color: var(--text-light); 
 }
 
 .quadrant h3 {
     text-align: center;
-    color: var(--accent-green); /* Título do quadrante em verde */
+    color: var(--accent-green); 
     margin-top: 0;
     margin-bottom: 15px;
-    font-size: 1.4em;
-    border-bottom: 2px solid var(--border-color); /* Borda inferior */
+    font-size: 0.8em;
+    border-bottom: 2px solid var(--border-color); 
     padding-bottom: 10px;
+    font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+/* Posicionamento dos quadrantes na nova grade */
+.quadrant.q1-sessions {
+    grid-column: 1; 
+    grid-row: 1; 
+}
+
+.quadrant.q2-mock {
+    grid-column: 2; 
+    grid-row: 1; 
+}
+
+.quadrant.q3-mock {
+    grid-column: 3; 
+    grid-row: 1; 
+}
+
+.quadrant.q4-details {
+    grid-column: 1 / span 3; 
+    grid-row: 2; 
 }
 
 /* Estilos para o container único das sessões (dentro do Quadrante 1) */
@@ -282,26 +320,116 @@ code {
     flex-direction: column;
     gap: 10px; 
     padding: 15px;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-color); 
     border-radius: 8px;
-    background-color: var(--primary-dark-bg); /* Fundo mais escuro para a caixa interna */
+    background-color: var(--primary-dark-bg); 
     flex-grow: 1; 
 }
 
-.session-link-item {
-    background-color: var(--button-bg); /* Fundo de cada link */
-    border-radius: 5px;
-    padding: 10px 15px;
-    transition: background-color 0.2s ease;
+/* Tabela invisível de sessões */
+.session-table-header, .session-table-row a {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Removido 1fr final para Circuito */
+  gap: 10px;
+  text-align: left;
+  align-items: center;
 }
 
-.session-link-item:hover {
-    background-color: var(--button-hover);
+.session-table-header {
+  color: var(--accent-green); 
+  font-weight: bold;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 5px;
+  margin-bottom: 10px;
 }
 
-.session-link-item a {
+.session-table-row {
+  background-color: var(--button-bg); 
+  border-radius: 5px;
+  padding: 10px 15px;
+  transition: background-color 0.2s ease;
+}
+
+.session-table-row:hover {
+  background-color: var(--button-hover);
+}
+
+.session-table-row a {
     text-decoration: none;
-    color: var(--text-light); /* Texto do link claro */
+    color: var(--text-light);
     font-weight: bold;
-    display: block; 
+    display: contents; 
+    font-size: 0.8em; 
+    font-family: 'Formula1 Display Bold', sans-serif; 
+}
+.session-table-row a span {
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+}
+
+.session-table-row:hover a {
+    color: var(--text-light); 
+}
+
+/* Remove o fundo cinza das linhas da sessão */
+.session-table-row.no-background {
+  background: none;
+  padding: 0;
+}
+
+/* Recria o grid sem usar <a> como wrapper */
+.session-table-data {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+  color: var(--accent-green); /* verde neon */
+  font-weight: bold;
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.9em;
+}
+
+/* Remove fundo da caixa */
+.sessions-container-box.no-bg {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Cabeçalho da tabela */
+.session-table-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+  color: var(--accent-green);
+  font-weight: bold;
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.95em;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Linhas clicáveis */
+.session-table-link-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+  padding: 4px 0;
+  color: var(--text-light);
+  font-weight: bold;
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.9em;
+  text-decoration: none;
+}
+
+.session-table-link-row:hover {
+  text-decoration: underline;
+  cursor: pointer;
 }
