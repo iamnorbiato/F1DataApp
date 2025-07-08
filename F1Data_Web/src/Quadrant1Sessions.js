@@ -1,7 +1,8 @@
 // G:\Learning\F1Data\F1Data_Web\src\Quadrant1Sessions.js
 import React, { useState, useEffect } from 'react';
 
-function Quadrant1Sessions({ meetingKey }) {
+// NOVO: Recebe onSessionSelect e selectedSessionKey como props
+function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,7 +42,6 @@ function Quadrant1Sessions({ meetingKey }) {
     }
   }, [meetingKey, API_BASE_URL]); 
 
-  // Função auxiliar para formatar a data como "YYYY-MM-DD HH:MM:SS"
   const formatSessionDate = (dateString) => {
     if (!dateString) return 'N/A';
     const parts = dateString.split('T');
@@ -52,8 +52,12 @@ function Quadrant1Sessions({ meetingKey }) {
     return dateString.replace('Z', '').replace('T', ' '); 
   };
 
-  const handleSessionClick = (sessionKey) => {
-      console.log(`Sessão clicada: ${sessionKey}`);
+  // MODIFICADO: Chama a prop onSessionSelect
+  const handleSessionClick = (sessionKey, sessionName) => {
+      console.log(`Sessão clicada: ${sessionKey} - ${sessionName}`);
+      if (onSessionSelect) {
+          onSessionSelect(sessionKey, sessionName);
+      }
   };
 
   if (loading) {
@@ -70,7 +74,7 @@ function Quadrant1Sessions({ meetingKey }) {
   return (
     <div className="sessions-container-box no-bg">
       <div className="session-table-header">
-        <span>Evento</span>
+        <span>Sessão</span>
         <span>Data</span>
       </div>
 
@@ -80,9 +84,10 @@ function Quadrant1Sessions({ meetingKey }) {
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            handleSessionClick(session.session_key);
+            handleSessionClick(session.session_key, session.session_name); // Passa o nome também
           }}
-          className="session-table-link-row"
+          // NOVO: Adiciona a classe 'active' se a sessão for a selecionada
+          className={`session-table-link-row ${selectedSessionKey === session.session_key ? 'active' : ''}`}
         >
           <span>{session.session_name || 'N/A'}</span>
           <span>{formatSessionDate(session.date_start)}</span>

@@ -1,6 +1,7 @@
 # G:\Learning\F1Data\F1Data_App\core\serializers.py
 from rest_framework import serializers
-from .models import Meetings, Sessions
+from .models import Meetings, Sessions, Drivers, Weather, SessionResult, Laps, Pit, Stint, Position, Intervals, RaceControl, TeamRadio, CarData, Location
+
 from django.db.models import Model
 
 # Serializer para listar anos distintos
@@ -38,5 +39,76 @@ class MeetingFilterSerializer(serializers.ModelSerializer):
 class SessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sessions
-        # Campos específicos que você pediu, mais session_key
         fields = ['session_key', 'date_start', 'session_name'] #, 'circuit_short_name']
+        
+# Serializer para Drivers
+class DriversSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Drivers
+        fields = ['driver_number', 'broadcast_name', 'full_name', 'name_acronym', 'team_name', 'team_colour', 'first_name', 'last_name', 'headshot_url', 'country_code']
+        
+# Serializer para Weather
+class WeatherSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Weather
+        fields = ['session_key', 'meeting_key', 'session_date', 'wind_direction', 'air_temperature', 'humidity', 'pressure', 'rainfall', 'wind_speed', 'track_temperature',]
+        
+# Serializer para SessionResult
+class SessionResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SessionResult
+        fields = ['session_key', 'driver_number', 'position', 'grid_position', 'fastest_lap_time', 'fastest_lap_speed', 'points', 'laps_completed'] 
+        
+# Serializer para Laps
+class LapsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Laps
+        fields = ['session_key', 'driver_number', 'lap_number', 'lap_time', 'sector_1_time', 'sector_2_time', 'sector_3_time', 'lap_speed'] 
+        
+#Serializer para Pit Stops
+class PitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Pit
+        fields = ['session_key', 'driver_number', 'lap_number', 'date', 'pit_stop_duration']
+
+#Serializer para Stints
+class StintSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Stint
+        fields = ['session_key', 'driver_number', 'stint_number', 'lap_start', 'lap_end', 'compound', 'type_age_at_start']
+        
+#Serializer para Position
+class PositionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Position
+        fields = ['session_key', 'driver_number', 'position', 'date']
+        
+#Serializer para Intervals
+class IntervalsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Intervals
+        fields = ['session_key', 'driver_number', 'date', 'gap_to_leader', 'interval']
+        
+# Serializer para RaceControl
+class RaceControlSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RaceControl
+        fields = ['session_key', 'session_date', 'driver_number', 'lap_number', 'category', 'flag', 'scope', 'sector', 'message']
+        
+#Serializer para TeamRadio
+class TeamRadioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeamRadio
+        fields = ['session_key', 'driver_number', 'date', 'recording_url']
+        
+# Serializer para CarData
+class CarDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CarData
+        fields = ['session_key', 'driver_number', 'date', 'speed', 'n_gear', 'drs', 'throttle', 'break', 'rpm']
+        
+#Serializer para Location
+class LocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Location
+        fields = ['session_key', 'driver_number', 'date', 'z', 'x', 'y']

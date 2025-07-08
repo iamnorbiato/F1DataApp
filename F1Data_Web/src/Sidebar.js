@@ -3,7 +3,7 @@ import React from 'react';
 
 function Sidebar({ onMenuItemClick, activeMenuItem }) {
   const menuItems = [
-    { name: 'races', label: 'Corridas' },
+    { name: 'races', label: "Grande Premio" },
     { name: 'teams', label: 'Equipes' },
     { name: 'drivers', label: 'Pilotos' },
     { name: 'circuits', label: 'Circuitos' },

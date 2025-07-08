@@ -50,25 +50,27 @@ code {
 
 /* Sidebar */
 .sidebar-container {
-  width: 250px; 
-  background-color: var(--sidebar-bg); 
+  width: 250px;
+  background-color: transparent; /* Deveria ser transparente agora */
   color: var(--text-light);
-  padding: 20px;
+  padding: 0; /* Deveria ser 0 agora */
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 5px var(--shadow-color);
+  box-shadow: none; /* Deveria ser none agora */
   z-index: 10;
-  border-radius: 8px; 
-  margin: 15px; 
-  height: fit-content; 
+  border-radius: 0; /* Deveria ser 0 agora */
+  margin: 15px; /* <--- PROVÁVEL CULPADO: ESTA LINHA PRECISA MUDAR */
+  height: fit-content;
 }
 
 .sidebar-container h2 {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 15px; /* ALTERADO: Ajuste a margem inferior para dar espaço à linha */
   font-size: 1.0em;
   color: var(--accent-green); 
   font-family: 'Formula1 Display Bold', sans-serif; 
+  border-bottom: 2px solid var(--border-color); /* NOVO: Adiciona a linha separadora */
+  padding-bottom: 10px; /* NOVO: Adiciona espaço entre o texto e a linha */
 }
 
 .menu-list {
@@ -271,15 +273,18 @@ code {
 
 /* Estilo base para todos os quadrantes individuais */
 .quadrant {
-    background-color: var(--secondary-dark-bg); 
+    background-color: var(--secondary-dark-bg);
     border-radius: 12px;
     box-shadow: 0 4px 12px var(--shadow-color);
     padding: 20px;
     display: flex;
     flex-direction: column;
-    min-height: 250px; 
-    position: relative; 
-    color: var(--text-light); 
+    height: 300px; /* MUDANÇA CRÍTICA: Defina uma altura fixa para o quadrante.
+                      Ajuste '300px' para a altura exata que você deseja que este bloco tenha.
+                      (250px do min-height + 2x20px de padding = ~290px de conteúdo visível sem scroll.
+                      300px dá uma pequena margem e ativa o scroll se o conteúdo for maior.) */
+    position: relative;
+    color: var(--text-light);
 }
 
 .quadrant h3 {
@@ -358,9 +363,8 @@ code {
     text-decoration: none;
     color: var(--text-light);
     font-weight: bold;
-    display: contents; 
-    font-size: 0.8em; 
-    font-family: 'Formula1 Display Bold', sans-serif; 
+    font-size: 0.8em;
+    font-family: 'Formula1 Display Bold', sans-serif;
 }
 .session-table-row a span {
     white-space: nowrap; 
@@ -414,22 +418,102 @@ code {
   border-bottom: 1px solid var(--border-color);
 }
 
-/* Linhas clicáveis */
+/* Linhas clicáveis - MODIFICADO para ser igual a .driver-list-item */
 .session-table-link-row {
-  display: grid;
+  display: grid; /* Mantém o display grid para Evento e Data */
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   text-align: left;
   align-items: center;
-  padding: 4px 0;
+  background-color: var(--button-bg);
+  border-radius: 5px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
   color: var(--text-light);
   font-weight: bold;
   font-family: 'Formula1 Display Bold', sans-serif;
-  font-size: 0.9em;
+  font-size: 0.8em; 
   text-decoration: none;
+  transition: background-color 0.2s ease;
 }
 
+/* Linhas clicáveis - HOVER - MODIFICADO para ser igual a .driver-list-item:hover */
 .session-table-link-row:hover {
-  text-decoration: underline;
+  background-color: var(--button-hover); /* ALTERADO: Mude o fundo no hover */
   cursor: pointer;
+  /* text-decoration: underline; */ /* REMOVIDO: Não queremos sublinhado no hover */
+}
+
+/* Destaque para a sessão selecionada em Quadrant1Sessions */
+.session-table-link-row.active {
+    background-color: var(--accent-green);
+    color: var(--primary-dark-bg);
+    font-weight: bold;
+}
+
+/* Estilos para o container da lista de drivers (dentro do Quadrante 2) */
+.drivers-list-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Ocupa a altura total do quadrante */
+    overflow: hidden; /* Garante que o scroll fique dentro de drivers-list-scrollable */
+    background-color: transparent; /* Novo: Torna o fundo transparente */
+    border: none;                  /* Novo: Remove a borda */
+    padding: 0;                    /* Novo: Remove o padding extra do container principal, pois os itens internos terão o seu */
+}
+.drivers-table-header {
+    display: grid;
+    grid-template-columns: 0.5fr 1.5fr 1fr; /* Ajuste as colunas conforme necessário */
+    gap: 10px;
+    text-align: left;
+    color: var(--accent-green);
+    font-weight: bold;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+.drivers-list-scrollable {
+    flex-grow: 1; /* Permite que ocupe o espaço restante */
+    overflow-y: auto; /* Adiciona scroll vertical quando necessário */
+    max-height: calc(100% - 50px);
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-green) var(--secondary-dark-bg);
+}
+
+/* Estilos para a barra de rolagem (WebKit - Chrome, Safari) */
+.drivers-list-scrollable::-webkit-scrollbar {
+    width: 8px;
+}
+
+.drivers-list-scrollable::-webkit-scrollbar-track {
+    background: var(--secondary-dark-bg);
+    border-radius: 10px;
+}
+
+.drivers-list-scrollable::-webkit-scrollbar-thumb {
+    background-color: var(--accent-green);
+    border-radius: 10px;
+    border: 2px solid var(--secondary-dark-bg);
+}
+
+.driver-list-item {
+    display: grid;
+    grid-template-columns: 0.5fr 1.5fr 1fr; /* Deve ser consistente com o header */
+    gap: 10px;
+    text-align: left;
+    background-color: var(--button-bg);
+    border-radius: 5px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 0.6em;
+    color: var(--text-light);
+    transition: background-color 0.2s ease;
+    font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+.driver-list-item:hover {
+    background-color: var(--button-hover);
 }

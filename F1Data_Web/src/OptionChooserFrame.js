@@ -138,11 +138,11 @@ function OptionChooserFrame({ menuItemName, onClose, menuItemLabel, onSearchData
 
       {selectedYear && (
         <Dropdown
-          label="Selecione o Meeting:"
+          label="Selecione o GP:"
           options={meetingsByYear}
           selectedValue={selectedMeeting}
           onSelect={handleSelectMeeting}
-          placeholder="Carregando meetings..."
+          placeholder="Carregando GPs..."
         />
       )}
 
