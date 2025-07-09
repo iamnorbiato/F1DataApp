@@ -50,7 +50,7 @@ code {
 
 /* Sidebar */
 .sidebar-container {
-  width: 250px;
+  width: 210px;
   background-color: transparent; /* Deveria ser transparente agora */
   color: var(--text-light);
   padding: 0; /* Deveria ser 0 agora */
@@ -119,7 +119,7 @@ code {
 /* Main Content (Container principal à direita da sidebar) */
 .main-content-container {
   flex-grow: 1; 
-  padding: 20px;
+  padding: 10px;
   background-color: var(--primary-dark-bg); 
   display: flex; 
   flex-wrap: wrap; 
@@ -223,7 +223,7 @@ code {
   -webkit-appearance: none; 
   -moz-appearance: none;
   appearance: none;
-  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cpath%20fill%3D%22%23bbbbbb%22%20d%3D%22M208.5%2C80.5L128%2C161l-80.5-80.5z%22%2F%3E%3C%2Fsvg%3E'); 
+/*  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cpath%20fill%3D%22%23bbbbbb%22%20d%3D%22M208.5%2C80.5L128%2C161l-80.5-80.5z%22%2F%3E%3C%2Fsvg%3E');  */
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 1em;
@@ -264,7 +264,7 @@ code {
     display: grid;
     grid-template-columns: repeat(3, 1fr); 
     grid-template-rows: auto 1fr; 
-    gap: 20px; 
+    gap: 10px; 
     padding: 20px; 
     flex-grow: 1; 
     align-items: start; 
@@ -279,10 +279,7 @@ code {
     padding: 20px;
     display: flex;
     flex-direction: column;
-    height: 300px; /* MUDANÇA CRÍTICA: Defina uma altura fixa para o quadrante.
-                      Ajuste '300px' para a altura exata que você deseja que este bloco tenha.
-                      (250px do min-height + 2x20px de padding = ~290px de conteúdo visível sem scroll.
-                      300px dá uma pequena margem e ativa o scroll se o conteúdo for maior.) */
+    height: 300px; 
     position: relative;
     color: var(--text-light);
 }
@@ -309,9 +306,22 @@ code {
     grid-row: 1; 
 }
 
-.quadrant.q3-mock {
-    grid-column: 3; 
-    grid-row: 1; 
+.quadrant.quadrant-weather {
+  overflow: hidden;
+  padding: 10px;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.windrose-chart-container {
+  width: 100%;
+  max-width: 300px; /* ajuste conforme o espaço do quadrante */
+  height: auto;
+  text-align: center;
 }
 
 .quadrant.q4-details {
@@ -517,3 +527,66 @@ code {
 .driver-list-item:hover {
     background-color: var(--button-hover);
 }
+
+/* Estilos para o container do mapa da pista (dentro do Quadrante 3) */
+.track-map-container {
+    width: 100%;
+    height: 100%; /* Ocupa 100% da altura do quadrante pai */
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centraliza o conteúdo horizontalmente */
+    justify-content: flex-start; /* Alinha o conteúdo ao topo (título e depois o mapa) */
+
+    /* Para que o container do mapa se funda com o fundo do quadrante, como os outros itens de lista */
+    background-color: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* Estilos para o título do mapa da pista */
+.track-map-container h4 {
+    color: var(--accent-green); /* Cor verde neon, consistente com outros títulos */
+    margin-top: 0;
+    margin-bottom: 10px; /* Espaço abaixo do título */
+    font-size: 0.9em; /* Tamanho da fonte */
+    text-align: center;
+}
+
+/* Estilos para o container dos controles de navegação de telemetria */
+.telemetry-navigation-controls {
+    display: flex;
+    justify-content: center; /* Centraliza os botões horizontalmente */
+    align-items: center; /* Alinha verticalmente os itens */
+    gap: 15px; /* Espaçamento entre os botões e o texto de tempo */
+    margin-top: 15px; /* Margem acima dos controles para separar do gráfico */
+    width: 100%; /* Ocupa a largura total do container pai */
+    padding-top: 10px; /* Padding acima para um pequeno espaço */
+    border-top: 1px solid var(--border-color); /* Linha divisória fina no topo */
+}
+
+/* Estilos para os botões de navegação (-10m, +10m) */
+.telemetry-nav-button {
+    background-color: var(--button-bg); /* Fundo dos botões, consistente com outros botões */
+    color: var(--text-light); /* Cor do texto claro */
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px; /* Bordas arredondadas */
+    cursor: pointer;
+    font-size: 0.85em;
+    font-family: 'Formula1 Display Bold', sans-serif;
+    transition: background-color 0.2s ease; /* Transição suave no hover */
+}
+
+.telemetry-nav-button:hover {
+    background-color: var(--button-hover); /* Fundo no hover */
+}
+
+/* Estilos para a exibição da hora atual da telemetria */
+.telemetry-current-time {
+    color: var(--accent-green); /* Cor de destaque (verde neon) */
+    font-weight: bold;
+    font-size: 0.9em;
+    font-family: 'Formula1 Display Bold', sans-serif;
+    white-space: nowrap; /* Evita quebra de linha do tempo */
+}
+

@@ -63,7 +63,9 @@ class SessionResultSerializer(serializers.ModelSerializer):
 class LapsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Laps
-        fields = ['session_key', 'driver_number', 'lap_number', 'lap_time', 'sector_1_time', 'sector_2_time', 'sector_3_time', 'lap_speed'] 
+        fields = ['session_key', 'driver_number', 'lap_number', 'date_start', 'duration_sector_1', 'duration_sector_2',
+                  'duration_sector_3', 'i1_speed', 'i2_speed', 'is_pit_out_lap', 'lap_duration', 'segments_sector_1',
+                  'segments_sector_2', 'segments_sector_3', 'st_speed'] 
         
 #Serializer para Pit Stops
 class PitSerializer(serializers.ModelSerializer):
@@ -75,7 +77,7 @@ class PitSerializer(serializers.ModelSerializer):
 class StintSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stint
-        fields = ['session_key', 'driver_number', 'stint_number', 'lap_start', 'lap_end', 'compound', 'type_age_at_start']
+        fields = ['session_key', 'driver_number', 'stint_number', 'lap_start', 'lap_end', 'compound', 'tyre_age_at_start']
         
 #Serializer para Position
 class PositionSerializer(serializers.ModelSerializer):

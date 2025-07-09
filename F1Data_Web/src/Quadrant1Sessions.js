@@ -1,7 +1,6 @@
 // G:\Learning\F1Data\F1Data_Web\src\Quadrant1Sessions.js
 import React, { useState, useEffect } from 'react';
 
-// NOVO: Recebe onSessionSelect e selectedSessionKey como props
 function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -10,38 +9,35 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:30080';
 
   useEffect(() => {
-    if (meetingKey) {
-      const fetchSessions = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const apiUrl = `${API_BASE_URL}/api/sessions-by-meeting/?meeting_key=${meetingKey}`;
-          console.log('DEBUG Q1: URL da API de sessões:', apiUrl);
+    const fetchSessions = async () => {
+      if (!meetingKey) {
+        setSessions([]);
+        setLoading(false);
+        return;
+      }
 
-          const response = await fetch(apiUrl);
-
-          if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status} ${response.statusText}`);
-          }
-
-          const data = await response.json();
-          console.log('DEBUG Q1: Dados de sessões recebidos:', data);
-
-          setSessions(data); 
-        } catch (err) {
-          console.error('Erro ao buscar sessões:', err);
-          setError(err.message || 'Erro ao carregar sessões.');
-        } finally {
-          setLoading(false);
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/sessions-by-meeting/?meeting_key=${meetingKey}`);
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar sessões: ${response.status} ${response.statusText}`);
         }
-      };
-      fetchSessions();
-    } else {
-      setSessions([]); 
-      setLoading(false);
-    }
-  }, [meetingKey, API_BASE_URL]); 
+        const data = await response.json();
+        setSessions(data);
+        console.log('DEBUG Quadrant1Sessions: Sessões carregadas para o meetingKey:', meetingKey, data);
+      } catch (err) {
+        console.error('Erro em Quadrant1Sessions:', err);
+        setError(err.message || 'Erro ao carregar sessões.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    fetchSessions();
+  }, [meetingKey, API_BASE_URL]);
+
+  // FUNÇÃO AUXILIAR RESTAURADA: Para formatar a data
   const formatSessionDate = (dateString) => {
     if (!dateString) return 'N/A';
     const parts = dateString.split('T');
@@ -49,15 +45,12 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
         const timePart = parts[1].split(/[+-Z]/)[0];
         return `${parts[0]} ${timePart}`;
     }
-    return dateString.replace('Z', '').replace('T', ' '); 
+    return dateString.replace('Z', '').replace('T', ' ');
   };
 
-  // MODIFICADO: Chama a prop onSessionSelect
-  const handleSessionClick = (sessionKey, sessionName) => {
-      console.log(`Sessão clicada: ${sessionKey} - ${sessionName}`);
-      if (onSessionSelect) {
-          onSessionSelect(sessionKey, sessionName);
-      }
+  // MODIFICAÇÃO CORRETA: Passa session.date_start para o componente pai
+  const handleSessionClick = (session) => {
+      onSessionSelect(session.session_key, session.session_name, session.date_start);
   };
 
   if (loading) {
@@ -69,12 +62,14 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
   }
 
   if (sessions.length === 0) {
-    return <p>Nenhuma sessão encontrada para este meeting.</p>;
+    return <p>Nenhuma sessão encontrada para este evento.</p>;
   }
+
+  // ESTRUTURA DE RENDERIZAÇÃO ORIGINAL RESTAURADA:
   return (
     <div className="sessions-container-box no-bg">
       <div className="session-table-header">
-        <span>Sessão</span>
+        <span>Evento</span>
         <span>Data</span>
       </div>
 
@@ -84,9 +79,9 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            handleSessionClick(session.session_key, session.session_name); // Passa o nome também
+            // Passa o objeto session completo para o handleSessionClick
+            handleSessionClick(session);
           }}
-          // NOVO: Adiciona a classe 'active' se a sessão for a selecionada
           className={`session-table-link-row ${selectedSessionKey === session.session_key ? 'active' : ''}`}
         >
           <span>{session.session_name || 'N/A'}</span>

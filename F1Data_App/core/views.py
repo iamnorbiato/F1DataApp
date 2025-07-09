@@ -4,6 +4,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+from datetime import datetime, timedelta, timezone
+from rest_framework.exceptions import ValidationError 
 from .models import Meetings, Sessions, Drivers, Weather, SessionResult, Laps, Pit, Stint, Position, Intervals, RaceControl, TeamRadio, CarData, Location
 
 from .serializers import (
@@ -227,19 +229,40 @@ class CarDataListBySessionAndDriver(generics.ListAPIView):
         
         return CarData.objects.filter( session_key=session_key, driver_number=driver_number ).order_by('date')
     
-#Endpoint para listar Localizações filtradas por session_key
+# Endpoint para listar Localizações filtradas por session_key, driver_number e data inicial
 class LocationListBySessionAndDriver(generics.ListAPIView):
     serializer_class = LocationSerializer
 
     def get_queryset(self):
         session_key = self.request.query_params.get('session_key')
         driver_number = self.request.query_params.get('driver_number')
-        if not session_key or not driver_number:
-            raise generics.ValidationError({"error": "Os parâmetros 'session_key' e 'driver_number' são obrigatórios."})
+        date_str = self.request.query_params.get('date', None)
+
+        if not session_key or not driver_number or not date_str:
+            raise ValidationError({"error": "Os parâmetros 'session_key', 'driver_number' e 'date' são obrigatórios."})
+
         try:
             session_key = int(session_key)
             driver_number = int(driver_number)
+            
+            # MUDANÇA AQUI: Tratamento para o sufixo 'Z' do ISO 8601
+            if date_str.endswith('Z'):
+                # Remove o 'Z' e considera como UTC explicitamente
+                date = datetime.fromisoformat(date_str[:-1]) # Remove o 'Z'
+                date = date.replace(tzinfo=timezone.utc)    # Define o fuso horário como UTC
+            else:
+                # Para outros formatos ISO que não terminam com 'Z'
+                date = datetime.fromisoformat(date_str)
+            
         except ValueError:
-            raise generics.ValidationError({"error": "Os parâmetros 'session_key' e 'driver_number' devem ser números inteiros."})
+            raise ValidationError({"error": "Parâmetros inválidos. 'session_key' e 'driver_number' devem ser inteiros, e 'date' deve estar no formato ISO 8601."})
         
-        return Location.objects.filter(session_key=session_key).order_by('date')
+        # Define intervalo de 10 minutos a partir da data
+        date_limit = date + timedelta(minutes=10)
+
+        return Location.objects.filter(
+            session_key=session_key,
+            driver_number=driver_number,
+            date__gte=date,
+            date__lt=date_limit
+        ).order_by('date')
