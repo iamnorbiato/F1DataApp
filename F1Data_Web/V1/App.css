@@ -1,0 +1,592 @@
+/* G:\Learning\F1Data\F1Data_Web\src\App.css */
+
+:root {
+  --primary-dark-bg: #1a1a1a; 
+  --secondary-dark-bg: #2a2a2a; 
+  --sidebar-bg: #111111; 
+  --text-light: #ffffff; 
+  --text-medium: #bbbbbb; 
+  --accent-green: #00ff00; 
+  --button-bg: #444444; 
+  --button-hover: #555555;
+  --border-color: #3a3a3a; 
+  --shadow-color: rgba(0,0,0,0.5); 
+}
+
+@font-face {
+  font-family: 'Formula1 Display Bold';
+  src: url('./assets/fonts/Formula1-Bold.ttf') format('truetype'); 
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+/* --- FIM DO BLOCO @font-face --- */
+
+body {
+  margin: 0;
+  font-family: 'Formula1 Display Bold', sans-serif; 
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--primary-dark-bg); 
+  color: var(--text-light); 
+  min-height: 100vh; 
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Container principal da aplicação */
+.App {
+  display: flex;
+  min-height: 100vh;
+  overflow: hidden;
+  background-color: var(--primary-dark-bg); 
+  border-radius: 12px; 
+  box-shadow: 0 4px 10px var(--shadow-color);
+  margin: 15px; 
+}
+
+/* Sidebar */
+.sidebar-container {
+  width: 210px;
+  background-color: transparent; /* Deveria ser transparente agora */
+  color: var(--text-light);
+  padding: 0; /* Deveria ser 0 agora */
+  display: flex;
+  flex-direction: column;
+  box-shadow: none; /* Deveria ser none agora */
+  z-index: 10;
+  border-radius: 0; /* Deveria ser 0 agora */
+  margin: 15px; /* <--- PROVÁVEL CULPADO: ESTA LINHA PRECISA MUDAR */
+  height: fit-content;
+}
+
+.sidebar-container h2 {
+  text-align: center;
+  margin-bottom: 15px; /* ALTERADO: Ajuste a margem inferior para dar espaço à linha */
+  font-size: 1.0em;
+  color: var(--accent-green); 
+  font-family: 'Formula1 Display Bold', sans-serif; 
+  border-bottom: 2px solid var(--border-color); /* NOVO: Adiciona a linha separadora */
+  padding-bottom: 10px; /* NOVO: Adiciona espaço entre o texto e a linha */
+}
+
+.menu-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1; 
+}
+
+.menu-item-wrapper {
+  position: relative;
+  margin-bottom: 10px; 
+}
+
+.menu-item-button {
+  background-color: var(--button-bg); 
+  color: var(--text-light);
+  border: none;
+  padding: 12px 15px;
+  text-align: center; 
+  width: 100%;
+  border-radius: 8px; 
+  cursor: pointer;
+  font-size: 1.1em;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 2px 4px var(--shadow-color);
+  display: flex;
+  align-items: center;
+  justify-content: center; 
+  gap: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+.menu-item-button:hover {
+  background-color: var(--button-hover);
+  transform: translateY(-2px);
+}
+
+.menu-item-button.active {
+  background-color: var(--accent-green); 
+  color: var(--primary-dark-bg); 
+  font-weight: bold;
+  box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+/* Main Content (Container principal à direita da sidebar) */
+.main-content-container {
+  flex-grow: 1; 
+  padding: 10px;
+  background-color: var(--primary-dark-bg); 
+  display: flex; 
+  flex-wrap: wrap; 
+  align-content: flex-start; 
+  box-sizing: border-box; 
+}
+
+.welcome-message {
+    width: 100%; 
+    text-align: center;
+    padding: 50px;
+    color: var(--text-light);
+    font-size: 0.8em;
+    font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+.welcome-message h1 {
+    color: var(--accent-green);
+    font-size: 2.5em;
+    margin-bottom: 15px;
+    font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+/* Estilos para o OptionChooserFrame (o popup de seleção) */
+.option-chooser-frame {
+  position: absolute;
+  background-color: var(--secondary-dark-bg); 
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px var(--shadow-color);
+  padding: 20px;
+  z-index: 1000; 
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  opacity: 0; 
+  visibility: hidden; 
+  transform: translateY(-10px); 
+  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+  color: var(--text-light); 
+  font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+.option-chooser-frame.visible {
+  opacity: 1; 
+  visibility: visible; 
+  transform: translateY(0); 
+}
+
+.frame-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color); 
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.frame-header h4 {
+  margin: 0;
+  color: var(--text-light); 
+  font-size: 0.8em;
+  font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+.frame-close-button {
+  background: none;
+  border: none;
+  font-size: 0.8em;
+  cursor: pointer;
+  color: var(--text-medium);
+  transition: color 0.2s ease;
+}
+
+.frame-close-button:hover {
+  color: var(--accent-green); 
+}
+
+.dropdown-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dropdown-group label {
+  font-weight: bold;
+  color: var(--text-medium); 
+  font-size: 0.95em;
+  font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+.dropdown-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: 0.8em;
+  background-color: var(--button-bg); 
+  color: var(--text-light); 
+  cursor: pointer;
+  -webkit-appearance: none; 
+  -moz-appearance: none;
+  appearance: none;
+/*  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cpath%20fill%3D%22%23bbbbbb%22%20d%3D%22M208.5%2C80.5L128%2C161l-80.5-80.5z%22%2F%3E%3C%2Fsvg%3E');  */
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 1em;
+  font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+.dropdown-group select:focus {
+  border-color: var(--accent-green);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 255, 0, 0.2); 
+}
+
+.action-button-container {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.action-button {
+  padding: 12px 25px;
+  background-color: var(--accent-green); 
+  color: var(--primary-dark-bg); 
+  border: none;
+  border-radius: 5px;
+  font-size: 0.8em;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 2px 4px var(--shadow-color);
+  font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+.action-button:hover {
+  background-color: #00cc00; 
+  transform: translateY(-2px);
+}
+
+/* --- Layout para os Quadrantes (Container da Grid) --- */
+.main-content-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); 
+    grid-template-rows: auto 1fr; 
+    gap: 10px; 
+    padding: 20px; 
+    flex-grow: 1; 
+    align-items: start; 
+    width: 100%; 
+}
+
+/* Estilo base para todos os quadrantes individuais */
+.quadrant {
+    background-color: var(--secondary-dark-bg);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 300px; 
+    position: relative;
+    color: var(--text-light);
+}
+
+.quadrant h3 {
+    text-align: center;
+    color: var(--accent-green); 
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 0.8em;
+    border-bottom: 2px solid var(--border-color); 
+    padding-bottom: 10px;
+    font-family: 'Formula1 Display Bold', sans-serif; 
+}
+
+/* Posicionamento dos quadrantes na nova grade */
+.quadrant.q1-sessions {
+    grid-column: 1; 
+    grid-row: 1; 
+}
+
+.quadrant.q2-mock {
+    grid-column: 2; 
+    grid-row: 1; 
+}
+
+.quadrant.quadrant-weather {
+  overflow: hidden;
+  padding: 10px;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.windrose-chart-container {
+  width: 100%;
+  max-width: 300px; /* ajuste conforme o espaço do quadrante */
+  height: auto;
+  text-align: center;
+}
+
+.quadrant.q4-details {
+    grid-column: 1 / span 3; 
+    grid-row: 2; 
+}
+
+/* Estilos para o container único das sessões (dentro do Quadrante 1) */
+.sessions-container-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; 
+    padding: 15px;
+    border: 1px solid var(--border-color); 
+    border-radius: 8px;
+    background-color: var(--primary-dark-bg); 
+    flex-grow: 1; 
+}
+
+/* Tabela invisível de sessões */
+.session-table-header, .session-table-row a {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Removido 1fr final para Circuito */
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+}
+
+.session-table-header {
+  color: var(--accent-green); 
+  font-weight: bold;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 5px;
+  margin-bottom: 10px;
+}
+
+.session-table-row {
+  background-color: var(--button-bg); 
+  border-radius: 5px;
+  padding: 10px 15px;
+  transition: background-color 0.2s ease;
+}
+
+.session-table-row:hover {
+  background-color: var(--button-hover);
+}
+
+.session-table-row a {
+    text-decoration: none;
+    color: var(--text-light);
+    font-weight: bold;
+    font-size: 0.8em;
+    font-family: 'Formula1 Display Bold', sans-serif;
+}
+.session-table-row a span {
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+}
+
+.session-table-row:hover a {
+    color: var(--text-light); 
+}
+
+/* Remove o fundo cinza das linhas da sessão */
+.session-table-row.no-background {
+  background: none;
+  padding: 0;
+}
+
+/* Recria o grid sem usar <a> como wrapper */
+.session-table-data {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+  color: var(--accent-green); /* verde neon */
+  font-weight: bold;
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.9em;
+}
+
+/* Remove fundo da caixa */
+.sessions-container-box.no-bg {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Cabeçalho da tabela */
+.session-table-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+  color: var(--accent-green);
+  font-weight: bold;
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.95em;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Linhas clicáveis - MODIFICADO para ser igual a .driver-list-item */
+.session-table-link-row {
+  display: grid; /* Mantém o display grid para Evento e Data */
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+  background-color: var(--button-bg);
+  border-radius: 5px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  color: var(--text-light);
+  font-weight: bold;
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.8em; 
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+}
+
+/* Linhas clicáveis - HOVER - MODIFICADO para ser igual a .driver-list-item:hover */
+.session-table-link-row:hover {
+  background-color: var(--button-hover); /* ALTERADO: Mude o fundo no hover */
+  cursor: pointer;
+  /* text-decoration: underline; */ /* REMOVIDO: Não queremos sublinhado no hover */
+}
+
+/* Destaque para a sessão selecionada em Quadrant1Sessions */
+.session-table-link-row.active {
+    background-color: var(--accent-green);
+    color: var(--primary-dark-bg);
+    font-weight: bold;
+}
+
+/* Estilos para o container da lista de drivers (dentro do Quadrante 2) */
+.drivers-list-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Ocupa a altura total do quadrante */
+    overflow: hidden; /* Garante que o scroll fique dentro de drivers-list-scrollable */
+    background-color: transparent; /* Novo: Torna o fundo transparente */
+    border: none;                  /* Novo: Remove a borda */
+    padding: 0;                    /* Novo: Remove o padding extra do container principal, pois os itens internos terão o seu */
+}
+.drivers-table-header {
+    display: grid;
+    grid-template-columns: 0.5fr 1.5fr 1fr; /* Ajuste as colunas conforme necessário */
+    gap: 10px;
+    text-align: left;
+    color: var(--accent-green);
+    font-weight: bold;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+.drivers-list-scrollable {
+    flex-grow: 1; /* Permite que ocupe o espaço restante */
+    overflow-y: auto; /* Adiciona scroll vertical quando necessário */
+    max-height: calc(100% - 50px);
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-green) var(--secondary-dark-bg);
+}
+
+/* Estilos para a barra de rolagem (WebKit - Chrome, Safari) */
+.drivers-list-scrollable::-webkit-scrollbar {
+    width: 8px;
+}
+
+.drivers-list-scrollable::-webkit-scrollbar-track {
+    background: var(--secondary-dark-bg);
+    border-radius: 10px;
+}
+
+.drivers-list-scrollable::-webkit-scrollbar-thumb {
+    background-color: var(--accent-green);
+    border-radius: 10px;
+    border: 2px solid var(--secondary-dark-bg);
+}
+
+.driver-list-item {
+    display: grid;
+    grid-template-columns: 0.5fr 1.5fr 1fr; /* Deve ser consistente com o header */
+    gap: 10px;
+    text-align: left;
+    background-color: var(--button-bg);
+    border-radius: 5px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 0.6em;
+    color: var(--text-light);
+    transition: background-color 0.2s ease;
+    font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+.driver-list-item:hover {
+    background-color: var(--button-hover);
+}
+
+/* Estilos para o container do mapa da pista (dentro do Quadrante 3) */
+.track-map-container {
+    width: 100%;
+    height: 100%; /* Ocupa 100% da altura do quadrante pai */
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centraliza o conteúdo horizontalmente */
+    justify-content: flex-start; /* Alinha o conteúdo ao topo (título e depois o mapa) */
+
+    /* Para que o container do mapa se funda com o fundo do quadrante, como os outros itens de lista */
+    background-color: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* Estilos para o título do mapa da pista */
+.track-map-container h4 {
+    color: var(--accent-green); /* Cor verde neon, consistente com outros títulos */
+    margin-top: 0;
+    margin-bottom: 10px; /* Espaço abaixo do título */
+    font-size: 0.9em; /* Tamanho da fonte */
+    text-align: center;
+}
+
+/* Estilos para o container dos controles de navegação de telemetria */
+.telemetry-navigation-controls {
+    display: flex;
+    justify-content: center; /* Centraliza os botões horizontalmente */
+    align-items: center; /* Alinha verticalmente os itens */
+    gap: 15px; /* Espaçamento entre os botões e o texto de tempo */
+    margin-top: 15px; /* Margem acima dos controles para separar do gráfico */
+    width: 100%; /* Ocupa a largura total do container pai */
+    padding-top: 10px; /* Padding acima para um pequeno espaço */
+    border-top: 1px solid var(--border-color); /* Linha divisória fina no topo */
+}
+
+/* Estilos para os botões de navegação (-10m, +10m) */
+.telemetry-nav-button {
+    background-color: var(--button-bg); /* Fundo dos botões, consistente com outros botões */
+    color: var(--text-light); /* Cor do texto claro */
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px; /* Bordas arredondadas */
+    cursor: pointer;
+    font-size: 0.6em;
+    font-family: 'Formula1 Display Bold', sans-serif;
+    transition: background-color 0.2s ease; /* Transição suave no hover */
+}
+
+.telemetry-nav-button:hover {
+    background-color: var(--button-hover); /* Fundo no hover */
+}
+
+/* Estilos para a exibição da hora atual da telemetria */
+.telemetry-current-time {
+    color: var(--accent-green); /* Cor de destaque (verde neon) */
+    font-weight: bold;
+    font-size: 0.9em;
+    font-family: 'Formula1 Display Bold', sans-serif;
+    white-space: nowrap; /* Evita quebra de linha do tempo */
+}
+
