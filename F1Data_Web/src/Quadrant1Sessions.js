@@ -37,7 +37,6 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
     fetchSessions();
   }, [meetingKey, API_BASE_URL]);
 
-  // FUNÇÃO AUXILIAR RESTAURADA: Para formatar a data
   const formatSessionDate = (dateString) => {
     if (!dateString) return 'N/A';
     const parts = dateString.split('T');
@@ -48,9 +47,9 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
     return dateString.replace('Z', '').replace('T', ' ');
   };
 
-  // MODIFICAÇÃO CORRETA: Passa session.date_start para o componente pai
+  // MODIFICADO AQUI: Agora passa session.date_end como quarto argumento
   const handleSessionClick = (session) => {
-      onSessionSelect(session.session_key, session.session_name, session.date_start);
+      onSessionSelect(session.session_key, session.session_name, session.date_start, session.date_end);
   };
 
   if (loading) {
@@ -65,7 +64,6 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
     return <p>Nenhuma sessão encontrada para este evento.</p>;
   }
 
-  // ESTRUTURA DE RENDERIZAÇÃO ORIGINAL RESTAURADA:
   return (
     <div className="sessions-container-box no-bg">
       <div className="session-table-header">
@@ -79,7 +77,6 @@ function Quadrant1Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) 
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            // Passa o objeto session completo para o handleSessionClick
             handleSessionClick(session);
           }}
           className={`session-table-link-row ${selectedSessionKey === session.session_key ? 'active' : ''}`}

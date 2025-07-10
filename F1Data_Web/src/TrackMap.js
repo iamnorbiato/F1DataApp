@@ -3,19 +3,30 @@ import React, { useState, useEffect, useRef } from 'react';
 import Plotly from 'plotly.js/dist/plotly-basic';
 import Plot from 'react-plotly.js';
 
-function TrackMap({ sessionKey, startDate }) {
+// Função auxiliar para formatar a hora com milissegundos (HH:MM:SS.ms)
+const formatTimeWithMilliseconds = (dateString) => {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+  const milliseconds = String(date.getUTCMilliseconds()).padStart(3, '0').substring(0, 2);
+  return `${hours}:${minutes}:${seconds}.${milliseconds}`;
+};
+
+// Formata data no padrão ISO UTC para enviar na URL (com Z)
+const formatDateUTCISOString = (date) => {
+  return date.toISOString();
+};
+
+function TrackMap({ sessionKey, startDate, endDate, selectedDriver }) {
   const [telemetryData, setTelemetryData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedDriver, setSelectedDriver] = useState(null);
-  const [allDrivers, setAllDrivers] = useState([]); // Mantido para referência, mas não usado para dropdown aqui
   const [currentTelemetryWindowStart, setCurrentTelemetryWindowStart] = useState(null);
   const [currentPointTime, setCurrentPointTime] = useState(null);
-  
-  // Estado para o multiplicador de velocidade da animação
-  const [speedMultiplier, setSpeedMultiplier] = useState(1.0); 
-  // Ref para armazenar o valor da velocidade para o loop de animação (não triggera re-render)
-  const speedMultiplierValueRef = useRef(1.0); 
+  const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
+  const speedMultiplierValueRef = useRef(1.0);
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:30080';
 
@@ -24,60 +35,54 @@ function TrackMap({ sessionKey, startDate }) {
   const plotDivRef = useRef(null);
   const animationStartTimeRef = useRef(performance.now());
 
-  // Efeito 1: Inicializa e reseta currentTelemetryWindowStart
+  const sessionStartDateRef = useRef(null);
+  const sessionEndDateRef = useRef(null);
+
+  // Ref para guardar o startDate inicial da sessão
+  const initialWindowStartRef = useRef(null);
+
+  // Atualiza currentTelemetryWindowStart quando sessionKey ou startDate mudam
   useEffect(() => {
     if (sessionKey && startDate) {
-      setCurrentTelemetryWindowStart(new Date(startDate));
+      const start = new Date(startDate);
+      if (!isNaN(start)) {
+        initialWindowStartRef.current = start;
+        setCurrentTelemetryWindowStart(start);
+        sessionStartDateRef.current = start;
+      }
     } else {
+      initialWindowStartRef.current = null;
       setCurrentTelemetryWindowStart(null);
+      sessionStartDateRef.current = null;
     }
   }, [sessionKey, startDate]);
 
-  // Efeito 2: Busca TODOS os drivers da sessão (para seleção padrão Driver 1)
   useEffect(() => {
-    const fetchDrivers = async () => {
-      if (!sessionKey) {
-        setAllDrivers([]);
-        setSelectedDriver(null);
-        setTelemetryData([]);
-        setCurrentTelemetryWindowStart(null);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/drivers-by-session/?session_key=${sessionKey}`);
-        if (!response.ok) throw new Error(`Erro ao buscar drivers: ${response.status}`);
-        const drivers = await response.json();
-        setAllDrivers(drivers);
-        // Sempre seleciona o primeiro driver da lista
-        setSelectedDriver(drivers[0] || null); 
-      } catch (err) {
-        setError(err.message || 'Erro ao carregar drivers.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDrivers();
-  }, [sessionKey, API_BASE_URL]);
+    if (endDate) {
+      const end = new Date(endDate);
+      sessionEndDateRef.current = isNaN(end) ? null : end;
+    } else {
+      sessionEndDateRef.current = null;
+    }
+  }, [endDate]);
 
-  // Efeito 3: Busca os dados de telemetria para a janela de tempo e driver selecionados
+  // Busca telemetria quando currentTelemetryWindowStart, driver ou sessionKey mudam
   useEffect(() => {
-    const fetchTelemetry = async () => {
-      if (!selectedDriver || !sessionKey || !currentTelemetryWindowStart) {
-        setTelemetryData([]);
-        setLoading(false);
-        if (animationFrameIdRef.current) {
-          cancelAnimationFrame(animationFrameIdRef.current);
-          animationFrameIdRef.current = null;
-        }
-        return;
+    if (!selectedDriver || !sessionKey || !currentTelemetryWindowStart) {
+      setTelemetryData([]);
+      setLoading(false);
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
       }
+      return;
+    }
+
+    const fetchTelemetryData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const url = `${API_BASE_URL}/api/location-by-session-and-driver/?session_key=${sessionKey}&driver_number=${selectedDriver.driver_number}&date=${currentTelemetryWindowStart.toISOString()}`;
+        const url = `${API_BASE_URL}/api/location-by-session-and-driver/?session_key=${sessionKey}&driver_number=${selectedDriver.driver_number}&date=${formatDateUTCISOString(currentTelemetryWindowStart)}`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Erro ao buscar telemetria: ${response.status}`);
         const data = await response.json();
@@ -89,10 +94,12 @@ function TrackMap({ sessionKey, startDate }) {
         setLoading(false);
       }
     };
-    fetchTelemetry();
+
+    fetchTelemetryData();
+
   }, [sessionKey, selectedDriver, API_BASE_URL, currentTelemetryWindowStart]);
 
-  // ANIMAÇÃO COM requestAnimationFrame
+  // Animação da bolinha do carro na pista
   useEffect(() => {
     if (telemetryData.length < 2 || !plotDivRef.current) {
       if (animationFrameIdRef.current) {
@@ -102,7 +109,7 @@ function TrackMap({ sessionKey, startDate }) {
       return;
     }
 
-    currentPointIndexRef.current = 0; // reseta índice ao receber novos dados
+    currentPointIndexRef.current = 0;
     animationStartTimeRef.current = performance.now();
 
     const animateCar = (timestamp) => {
@@ -134,7 +141,7 @@ function TrackMap({ sessionKey, startDate }) {
           Plotly.restyle(plotDivRef.current, {
             x: [[point.x]],
             y: [[point.y]],
-            text: [[`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${new Date(point.date).toLocaleTimeString('pt-BR')}`]]
+            text: [[`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${formatTimeWithMilliseconds(point.date)}`]]
           }, [1]);
         } catch (err) {
           console.warn("Erro ao animar ponto:", err);
@@ -157,10 +164,10 @@ function TrackMap({ sessionKey, startDate }) {
     };
   }, [telemetryData, selectedDriver]);
 
-  // Handlers para os botões de controle de velocidade
+  // Botões de velocidade
   const handleSlower = () => {
     setSpeedMultiplier(prevSpeed => {
-      const newSpeed = Math.max(0.1, prevSpeed * 0.5); // 50% mais lento, mínimo 0.1x
+      const newSpeed = Math.max(0.1, prevSpeed * 0.5);
       speedMultiplierValueRef.current = newSpeed;
       return newSpeed;
     });
@@ -168,16 +175,46 @@ function TrackMap({ sessionKey, startDate }) {
 
   const handleFaster = () => {
     setSpeedMultiplier(prevSpeed => {
-      const newSpeed = Math.min(10.0, prevSpeed * 1.5); // 50% mais rápido, máximo 10x
+      const newSpeed = Math.min(10.0, prevSpeed * 1.5);
       speedMultiplierValueRef.current = newSpeed;
       return newSpeed;
     });
   };
 
+  // Botões para navegar 10 minutos para trás ou para frente
+  const handlePrev10Min = () => {
+    if (currentTelemetryWindowStart && sessionStartDateRef.current) {
+      const newTime = new Date(currentTelemetryWindowStart.getTime() - 10 * 60 * 1000);
+      if (newTime >= sessionStartDateRef.current) {
+        setCurrentTelemetryWindowStart(newTime);
+      }
+    }
+  };
+
+  const handleNext10Min = () => {
+    if (currentTelemetryWindowStart && sessionEndDateRef.current) {
+      const newTime = new Date(currentTelemetryWindowStart.getTime() + 10 * 60 * 1000);
+      if (newTime <= sessionEndDateRef.current) {
+        setCurrentTelemetryWindowStart(newTime);
+      }
+    }
+  };
+
+  const isPrev10MinDisabled =
+    !currentTelemetryWindowStart ||
+    !sessionStartDateRef.current ||
+    (currentTelemetryWindowStart.getTime() - 10 * 60 * 1000 < sessionStartDateRef.current.getTime());
+
+  const isNext10MinDisabled =
+    !currentTelemetryWindowStart ||
+    !sessionEndDateRef.current ||
+    (currentTelemetryWindowStart.getTime() + 10 * 60 * 1000 > sessionEndDateRef.current.getTime());
+
   if (loading) return <p>Carregando mapa da pista...</p>;
+  if (!selectedDriver) return <p>Nenhum piloto selecionado para o mapa da pista.</p>;
   if (error) return <p style={{ color: 'red' }}>Erro: {error}</p>;
-  if (!selectedDriver && allDrivers.length === 0) return <p>Nenhum driver encontrado para esta sessão.</p>;
-  if (selectedDriver && telemetryData.length === 0) return <p>Nenhum dado de telemetria para o driver {selectedDriver.full_name || selectedDriver.driver_number}.</p>;
+  if (selectedDriver && telemetryData.length === 0)
+    return <p>Nenhum dado de telemetria para o driver {selectedDriver.full_name || selectedDriver.driver_number} nesta janela de tempo.</p>;
 
   const trackTrace = {
     x: telemetryData.map(d => d.x),
@@ -190,13 +227,15 @@ function TrackMap({ sessionKey, startDate }) {
 
   const initialPoint = telemetryData[0];
   const carPositionTrace = {
-    x: [initialPoint?.x],
-    y: [initialPoint?.y],
+    x: initialPoint ? [initialPoint.x] : [],
+    y: initialPoint ? [initialPoint.y] : [],
     mode: 'markers',
     marker: { size: 10, color: 'red' },
     name: 'Carro',
     hoverinfo: 'x+y+text',
-    text: [`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${new Date(initialPoint?.date).toLocaleTimeString('pt-BR')}`]
+    text: initialPoint
+      ? [`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${formatTimeWithMilliseconds(initialPoint.date)}`]
+      : []
   };
 
   const layout = {
@@ -212,7 +251,8 @@ function TrackMap({ sessionKey, startDate }) {
 
   return (
     <div className="track-map-container">
-      
+      <h4>Movimentação na Pista: {selectedDriver?.full_name || `Driver ${selectedDriver?.driver_number}`}</h4>
+
       <Plot
         data={[trackTrace, carPositionTrace]}
         layout={layout}
@@ -222,14 +262,27 @@ function TrackMap({ sessionKey, startDate }) {
         onInitialized={(figure, graphDiv) => { plotDivRef.current = graphDiv; }}
         onUpdate={(figure, graphDiv) => { plotDivRef.current = graphDiv; }}
       />
+
       <div className="telemetry-navigation-controls">
-        <button className="telemetry-nav-button" onClick={handleSlower}>Slower</button>
+        <button
+          className="telemetry-nav-button"
+          onClick={handlePrev10Min}
+          disabled={isPrev10MinDisabled}
+        >-10m</button>
+
+        <button className="telemetry-nav-button" onClick={handleSlower}>&lt;&lt;&lt;</button>
         <span className="telemetry-current-time">
           {currentPointTime
-            ? new Date(currentPointTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-            : currentTelemetryWindowStart?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || 'N/A'}
+            ? formatTimeWithMilliseconds(currentPointTime)
+            : (currentTelemetryWindowStart ? formatTimeWithMilliseconds(currentTelemetryWindowStart) : 'N/A')}
         </span>
-        <button className="telemetry-nav-button" onClick={handleFaster}>Faster</button>
+        <button className="telemetry-nav-button" onClick={handleFaster}>&gt;&gt;&gt;</button>
+
+        <button
+          className="telemetry-nav-button"
+          onClick={handleNext10Min}
+          disabled={isNext10MinDisabled}
+        >+10m</button>
       </div>
     </div>
   );

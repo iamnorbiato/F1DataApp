@@ -572,7 +572,7 @@ code {
     padding: 8px 12px;
     border-radius: 5px; /* Bordas arredondadas */
     cursor: pointer;
-    font-size: 0.85em;
+    font-size: 0.6em;
     font-family: 'Formula1 Display Bold', sans-serif;
     transition: background-color 0.2s ease; /* Transição suave no hover */
 }
