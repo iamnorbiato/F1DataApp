@@ -4,7 +4,7 @@ from . import views
 
 urlpatterns = [
     # Endpoint para os filtros de Meeting (anos e meetings por ano)
-    path('filters/meetings/', views.MeetingFilterAPIView.as_view(), name='meeting-filter-api'),
+    path('filters/meetings/', views.MeetingFilterAPIView.as_view(), name='meeting-filter'),
     path('sessions-by-meeting/', views.SessionListByMeeting.as_view(), name='sessions-by-meeting'),
     path('drivers-by-session/', views.DriversListBySession.as_view(), name='drivers-by-session'),
     path('weather-by-session/', views.WeatherListBySession.as_view(), name='weather-by-session'),
@@ -18,4 +18,5 @@ urlpatterns = [
     path('team-radio-by-session-and-driver/', views.TeamRadioListBySessionAndDriver.as_view(), name='team-radio-by-session-and-driver'),
     path('car-data-by-session-and-driver/', views.CarDataListBySessionAndDriver.as_view(), name='car-data-by-session-and-driver'),
     path('location-by-session-and-driver/', views.LocationListBySessionAndDriver.as_view(), name='location-by-session-and-driver'),
+    path('meetings-by-year/', views.MeetingListByYear.as_view(), name='meetings-by-year'),
 ]

@@ -35,6 +35,22 @@ class MeetingFilterSerializer(serializers.ModelSerializer):
         else:
             return obj.get('meeting_official_name', obj.get('meeting_name', 'N/A'))
 
+#Serializer para Meetings
+class MeetingSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+    meeting_official_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Meetings
+        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'meeting_official_name', 'display_name']
+
+    def get_display_name(self, obj):
+        return f"{obj.country_name} - {obj.meeting_name} - {obj.circuit_short_name}"
+
+    def get_meeting_official_name(self, obj):
+        return obj.meeting_official_name or obj.meeting_name
+
+
 # Serializer para sessões
 class SessionSerializer(serializers.ModelSerializer):
     class Meta:

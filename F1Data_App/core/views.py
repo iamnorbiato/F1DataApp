@@ -21,7 +21,8 @@ from .serializers import (
     WeatherSerializer,
     SessionResultSerializer,
     LapsSerializer, PitSerializer, StintSerializer, PositionSerializer,
-    IntervalsSerializer, RaceControlSerializer, TeamRadioSerializer, CarDataSerializer, LocationSerializer
+    IntervalsSerializer, RaceControlSerializer, TeamRadioSerializer, CarDataSerializer, LocationSerializer,
+    MeetingSerializer
 )
 
 # API para obter anos e meetings filtrados
@@ -44,6 +45,20 @@ class MeetingFilterAPIView(APIView):
         else:
             distinct_years = Meetings.objects.values_list('year', flat=True).distinct().order_by('year')
             return Response({'available_years': list(distinct_years)}, status=status.HTTP_200_OK)
+        
+# Endpoint para listar meetings filtrados por ano
+class MeetingListByYear(generics.ListAPIView):
+    serializer_class = MeetingSerializer
+
+    def get_queryset(self):
+        year = self.request.query_params.get('year', None)
+        if year is not None:
+            try:
+                year = int(year)
+                return Meetings.objects.filter(year=year).order_by('meeting_key')
+            except ValueError:
+                raise generics.ValidationError({"error": "O parâmetro 'year' deve ser um número inteiro."})
+        return Meetings.objects.none()
 
 # Endpoint para listar sessões filtradas por meeting_key
 class SessionListByMeeting(generics.ListAPIView):
