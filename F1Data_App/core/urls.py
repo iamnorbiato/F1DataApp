@@ -19,4 +19,5 @@ urlpatterns = [
     path('car-data-by-session-and-driver/', views.CarDataListBySessionAndDriver.as_view(), name='car-data-by-session-and-driver'),
     path('location-by-session-and-driver/', views.LocationListBySessionAndDriver.as_view(), name='location-by-session-and-driver'),
     path('meetings-by-year/', views.MeetingListByYear.as_view(), name='meetings-by-year'),
+    path('circuit/', views.CircuitDetailByCircuitID.as_view(), name='circuit-detail'),
 ]

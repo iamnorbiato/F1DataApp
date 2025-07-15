@@ -1,5 +1,6 @@
-/* G:\Learning\F1Data\F1Data_Web\src\App.css */
+/* G:\Learning\F1Data\F1Data_Web\src\App.css V23 */
 
+/* Variáveis de Tema (Reaproveitadas) */
 :root {
   --primary-dark-bg: #1a1a1a; 
   --secondary-dark-bg: #2a2a2a; 
@@ -11,25 +12,53 @@
   --button-hover: #555555;
   --border-color: #3a3a3a; 
   --shadow-color: rgba(0,0,0,0.5); 
+  --header-height: 80px; 
+  --mobile-menu-width: 250px; 
 }
 
+/* Garante que o menu mobile e o botão hambúrguer estejam ocultos por padrão */
+.mobile-sidebar,
+.mobile-menu-overlay,
+.hamburger-menu-button {
+  display: none;
+}
+
+
+/* Fontes (Reaproveitadas e Adicionada a Regular) */
 @font-face {
   font-family: 'Formula1 Display Bold';
   src: url('./assets/fonts/Formula1-Bold.ttf') format('truetype'); 
-  font-weight: normal;
+  font-weight: bold;
   font-style: normal;
   font-display: swap;
 }
-/* --- FIM DO BLOCO @font-face --- */
+
+@font-face {
+  font-family: 'Formula1 Display Regular';
+  src: url('./assets/fonts/Formula1-Regular.ttf') format('truetype'); 
+  font-weight: normal;
+  font-display: swap;
+}
+
+/* Reset Básico e Estilos Globais */
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
 
 body {
-  margin: 0;
-  font-family: 'Formula1 Display Bold', sans-serif; 
+  font-family: 'Formula1 Display Regular', sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  -moz-osx-moz-smoothing: grayscale;
   background-color: var(--primary-dark-bg); 
   color: var(--text-light); 
-  min-height: 100vh; 
 }
 
 code {
@@ -37,556 +66,530 @@ code {
     monospace;
 }
 
-/* Container principal da aplicação */
+/* --- Container Principal da Aplicação --- */
 .App {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
-  overflow: hidden;
-  background-color: var(--primary-dark-bg); 
-  border-radius: 12px; 
-  box-shadow: 0 4px 10px var(--shadow-color);
-  margin: 15px; 
+  background-color: var(--primary-dark-bg);
 }
 
-/* Sidebar */
-.sidebar-container {
-  width: 210px;
-  background-color: transparent; /* Deveria ser transparente agora */
-  color: var(--text-light);
-  padding: 0; /* Deveria ser 0 agora */
-  display: flex;
-  flex-direction: column;
-  box-shadow: none; /* Deveria ser none agora */
-  z-index: 10;
-  border-radius: 0; /* Deveria ser 0 agora */
-  margin: 15px; /* <--- PROVÁVEL CULPADO: ESTA LINHA PRECISA MUDAR */
-  height: fit-content;
-}
-
-.sidebar-container h2 {
-  text-align: center;
-  margin-bottom: 15px; /* ALTERADO: Ajuste a margem inferior para dar espaço à linha */
-  font-size: 1.0em;
-  color: var(--accent-green); 
-  font-family: 'Formula1 Display Bold', sans-serif; 
-  border-bottom: 2px solid var(--border-color); /* NOVO: Adiciona a linha separadora */
-  padding-bottom: 10px; /* NOVO: Adiciona espaço entre o texto e a linha */
-}
-
-.menu-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  flex-grow: 1; 
-}
-
-.menu-item-wrapper {
-  position: relative;
-  margin-bottom: 10px; 
-}
-
-.menu-item-button {
-  background-color: var(--button-bg); 
-  color: var(--text-light);
-  border: none;
-  padding: 12px 15px;
-  text-align: center; 
-  width: 100%;
-  border-radius: 8px; 
-  cursor: pointer;
-  font-size: 1.1em;
-  transition: background-color 0.3s ease, transform 0.2s ease;
-  box-shadow: 0 2px 4px var(--shadow-color);
-  display: flex;
-  align-items: center;
-  justify-content: center; 
-  gap: 10px;
-  font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-.menu-item-button:hover {
-  background-color: var(--button-hover);
-  transform: translateY(-2px);
-}
-
-.menu-item-button.active {
-  background-color: var(--accent-green); 
-  color: var(--primary-dark-bg); 
-  font-weight: bold;
-  box-shadow: 0 4px 8px var(--shadow-color);
-}
-
-/* Main Content (Container principal à direita da sidebar) */
-.main-content-container {
-  flex-grow: 1; 
-  padding: 10px;
-  background-color: var(--primary-dark-bg); 
-  display: flex; 
-  flex-wrap: wrap; 
-  align-content: flex-start; 
-  box-sizing: border-box; 
-}
-
-.welcome-message {
-    width: 100%; 
-    text-align: center;
-    padding: 50px;
-    color: var(--text-light);
-    font-size: 0.8em;
-    font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-.welcome-message h1 {
-    color: var(--accent-green);
-    font-size: 2.5em;
-    margin-bottom: 15px;
-    font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-/* Estilos para o OptionChooserFrame (o popup de seleção) */
-.option-chooser-frame {
-  position: absolute;
-  background-color: var(--secondary-dark-bg); 
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 8px 16px var(--shadow-color);
-  padding: 20px;
-  z-index: 1000; 
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  opacity: 0; 
-  visibility: hidden; 
-  transform: translateY(-10px); 
-  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
-  color: var(--text-light); 
-  font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-.option-chooser-frame.visible {
-  opacity: 1; 
-  visibility: visible; 
-  transform: translateY(0); 
-}
-
-.frame-header {
+/* --- Novo Header/Menu Principal --- */
+.main-header {
+  background-color: var(--secondary-dark-bg);
+  height: var(--header-height);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border-color); 
-  padding-bottom: 10px;
-  margin-bottom: 10px;
+  padding: 0 20px;
+  box-shadow: 0 2px 5px var(--shadow-color);
+  z-index: 100;
+  flex-direction: row-reverse; 
 }
 
-.frame-header h4 {
-  margin: 0;
-  color: var(--text-light); 
-  font-size: 0.8em;
-  font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-.frame-close-button {
-  background: none;
-  border: none;
-  font-size: 0.8em;
-  cursor: pointer;
-  color: var(--text-medium);
-  transition: color 0.2s ease;
-}
-
-.frame-close-button:hover {
-  color: var(--accent-green); 
-}
-
-.dropdown-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.dropdown-group label {
-  font-weight: bold;
-  color: var(--text-medium); 
-  font-size: 0.95em;
-  font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-.dropdown-group select {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 5px;
-  font-size: 0.8em;
-  background-color: var(--button-bg); 
-  color: var(--text-light); 
-  cursor: pointer;
-  -webkit-appearance: none; 
-  -moz-appearance: none;
-  appearance: none;
-/*  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cpath%20fill%3D%22%23bbbbbb%22%20d%3D%22M208.5%2C80.5L128%2C161l-80.5-80.5z%22%2F%3E%3C%2Fsvg%3E');  */
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 1em;
-  font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-.dropdown-group select:focus {
-  border-color: var(--accent-green);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(0, 255, 0, 0.2); 
-}
-
-.action-button-container {
-  text-align: center;
-  margin-top: 20px;
-}
-
-.action-button {
-  padding: 12px 25px;
-  background-color: var(--accent-green); 
-  color: var(--primary-dark-bg); 
-  border: none;
-  border-radius: 5px;
-  font-size: 0.8em;
-  cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
-  box-shadow: 0 2px 4px var(--shadow-color);
-  font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-.action-button:hover {
-  background-color: #00cc00; 
-  transform: translateY(-2px);
-}
-
-/* --- Layout para os Quadrantes (Container da Grid) --- */
-.main-content-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr); 
-    grid-template-rows: auto 1fr; 
-    gap: 10px; 
-    padding: 20px; 
-    flex-grow: 1; 
-    align-items: start; 
-    width: 100%; 
-}
-
-/* Estilo base para todos os quadrantes individuais */
-.quadrant {
-    background-color: var(--secondary-dark-bg);
-    border-radius: 12px;
-    box-shadow: 0 4px 12px var(--shadow-color);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    height: 300px; 
-    position: relative;
-    color: var(--text-light);
-}
-
-.quadrant h3 {
-    text-align: center;
-    color: var(--accent-green); 
-    margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 0.8em;
-    border-bottom: 2px solid var(--border-color); 
-    padding-bottom: 10px;
-    font-family: 'Formula1 Display Bold', sans-serif; 
-}
-
-/* Posicionamento dos quadrantes na nova grade */
-.quadrant.q1-sessions {
-    grid-column: 1; 
-    grid-row: 1; 
-}
-
-.quadrant.q2-mock {
-    grid-column: 2; 
-    grid-row: 1; 
-}
-
-.quadrant.quadrant-weather {
-  overflow: hidden;
-  padding: 10px;
-  max-width: 100%;
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.windrose-chart-container {
-  width: 100%;
-  max-width: 300px; /* ajuste conforme o espaço do quadrante */
-  height: auto;
-  text-align: center;
-}
-
-.quadrant.q4-details {
-    grid-column: 1 / span 3; 
-    grid-row: 2; 
-}
-
-/* Estilos para o container único das sessões (dentro do Quadrante 1) */
-.sessions-container-box {
-    display: flex;
-    flex-direction: column;
-    gap: 10px; 
-    padding: 15px;
-    border: 1px solid var(--border-color); 
-    border-radius: 8px;
-    background-color: var(--primary-dark-bg); 
-    flex-grow: 1; 
-}
-
-/* Tabela invisível de sessões */
-.session-table-header, .session-table-row a {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* Removido 1fr final para Circuito */
-  gap: 10px;
-  text-align: left;
-  align-items: center;
-}
-
-.session-table-header {
-  color: var(--accent-green); 
-  font-weight: bold;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 5px;
-  margin-bottom: 10px;
-}
-
-.session-table-row {
-  background-color: var(--button-bg); 
-  border-radius: 5px;
-  padding: 10px 15px;
-  transition: background-color 0.2s ease;
-}
-
-.session-table-row:hover {
-  background-color: var(--button-hover);
-}
-
-.session-table-row a {
-    text-decoration: none;
-    color: var(--text-light);
-    font-weight: bold;
-    font-size: 0.8em;
-    font-family: 'Formula1 Display Bold', sans-serif;
-}
-.session-table-row a span {
-    white-space: nowrap; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-}
-
-.session-table-row:hover a {
-    color: var(--text-light); 
-}
-
-/* Remove o fundo cinza das linhas da sessão */
-.session-table-row.no-background {
-  background: none;
-  padding: 0;
-}
-
-/* Recria o grid sem usar <a> como wrapper */
-.session-table-data {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  text-align: left;
-  align-items: center;
-  color: var(--accent-green); /* verde neon */
-  font-weight: bold;
+.header-logo {
   font-family: 'Formula1 Display Bold', sans-serif;
-  font-size: 0.9em;
-}
-
-/* Remove fundo da caixa */
-.sessions-container-box.no-bg {
-  background-color: transparent;
-  border: none;
-  padding: 0;
-}
-
-/* Cabeçalho da tabela */
-.session-table-header {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  text-align: left;
-  align-items: center;
   color: var(--accent-green);
-  font-weight: bold;
-  font-family: 'Formula1 Display Bold', sans-serif;
-  font-size: 0.95em;
-  margin-bottom: 10px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-/* Linhas clicáveis - MODIFICADO para ser igual a .driver-list-item */
-.session-table-link-row {
-  display: grid; /* Mantém o display grid para Evento e Data */
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  text-align: left;
-  align-items: center;
-  background-color: var(--button-bg);
-  border-radius: 5px;
-  padding: 6px 8px;
-  margin-bottom: 8px;
-  color: var(--text-light);
-  font-weight: bold;
-  font-family: 'Formula1 Display Bold', sans-serif;
-  font-size: 0.8em; 
+  font-size: 1.8em;
   text-decoration: none;
-  transition: background-color 0.2s ease;
+  white-space: nowrap;
+  text-align: right; 
+  flex-shrink: 0;
 }
 
-/* Linhas clicáveis - HOVER - MODIFICADO para ser igual a .driver-list-item:hover */
-.session-table-link-row:hover {
-  background-color: var(--button-hover); /* ALTERADO: Mude o fundo no hover */
+/* Menu de Navegação Desktop */
+.header-nav {
+  display: flex; 
+  gap: 10px; 
+  flex-grow: 1; 
+  justify-content: flex-start;
+  padding-left: 20px; 
+}
+
+/* Links do Menu Desktop (NÃO ALTERADO - SEM !IMPORTANT) */
+a.header-nav-item { 
+  color: var(--text-light); /* DEVE SER BRANCO - dependente de como seu ambiente resolve */
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 1.1em;
+  text-decoration: none; /* DEVE REMOVER SUBLINHADO - dependente de como seu ambiente resolve */
+  padding: 5px 0;
+  transition: color 0.3s ease;
+  position: relative; 
+}
+
+a.header-nav-item:hover {
+  color: var(--accent-green);
+}
+
+/* Botão do Hambúrguer (Apenas para Mobile) */
+.hamburger-menu-button {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 2em;
   cursor: pointer;
-  /* text-decoration: underline; */ /* REMOVIDO: Não queremos sublinhado no hover */
+  z-index: 101;
+  display: none; 
 }
 
-/* Destaque para a sessão selecionada em Quadrant1Sessions */
-.session-table-link-row.active {
-    background-color: var(--accent-green);
-    color: var(--primary-dark-bg);
-    font-weight: bold;
+/* --- Conteúdo Principal (Abaixo do Header) --- */
+.main-content-area {
+  flex-grow: 1;
+  padding: 20px; /* Mantém o padding da área principal */
+  background-color: var(--primary-dark-bg);
+  display: flex;
+  justify-content: flex-start; /* <<< ALTERADO: Alinha o conteúdo (content-display-layout) à esquerda */
+  align-items: flex-start;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  height: auto;
+  
 }
 
-/* Estilos para o container da lista de drivers (dentro do Quadrante 2) */
-.drivers-list-container {
-    display: flex;
-    flex-direction: column;
-    height: 100%; /* Ocupa a altura total do quadrante */
-    overflow: hidden; /* Garante que o scroll fique dentro de drivers-list-scrollable */
-    background-color: transparent; /* Novo: Torna o fundo transparente */
-    border: none;                  /* Novo: Remove a borda */
-    padding: 0;                    /* Novo: Remove o padding extra do container principal, pois os itens internos terão o seu */
-}
-.drivers-table-header {
-    display: grid;
-    grid-template-columns: 0.5fr 1.5fr 1fr; /* Ajuste as colunas conforme necessário */
-    gap: 10px;
-    text-align: left;
-    color: var(--accent-green);
-    font-weight: bold;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 8px;
-    margin-bottom: 10px;
-    font-size: 0.9em;
-    font-family: 'Formula1 Display Bold', sans-serif;
+/* --- Estilos para o Dropdown de Anos --- */
+.year-dropdown {
+  background-color: var(--secondary-dark-bg); 
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+  padding: 10px 0;
+  min-width: 150px; 
+  max-height: 200px; 
+  overflow-y: auto; 
+  position: absolute; 
+  top: 100%; 
+  left: 0; 
+  transform: none; 
+  z-index: 1001; 
+  display: flex;
+  flex-direction: column;
 }
 
-.drivers-list-scrollable {
-    flex-grow: 1; /* Permite que ocupe o espaço restante */
-    overflow-y: auto; /* Adiciona scroll vertical quando necessário */
-    max-height: calc(100% - 50px);
-    scrollbar-width: thin;
-    scrollbar-color: var(--accent-green) var(--secondary-dark-bg);
+.year-dropdown-item {
+  padding: 8px 15px;
+  color: var(--text-light);
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Estilos para a barra de rolagem (WebKit - Chrome, Safari) */
-.drivers-list-scrollable::-webkit-scrollbar {
+.year-dropdown-item:hover {
+  background-color: var(--button-hover);
+  color: var(--accent-green);
+}
+
+.year-dropdown p { 
+  padding: 8px 15px;
+  color: var(--text-medium);
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 1em;
+}
+
+/* --- Estilos para o componente MeetingsList --- */
+.meetings-list-container {
+  width: 100%;
+  min-width: 350px; /* Mantenha a largura máxima desejada para este contêiner */
+  max-width: 400px; /* Mantenha a largura máxima desejada para este contêiner */
+  /*flex-grow: 1; */ 
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  max-height: 40vh;
+  height: auto;
+  margin-top: 0; /* Pode ajustar para dar espaço do header se preferir */
+  margin-left: 0; /* Garante que ele comece na esquerda dentro do content-display-layout */
+  margin-right: 0; /* Remove o auto para não empurrar */
+  color: var(--text-light);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.meetings-list-container h2 {
+  text-align: center;
+  color: var(--accent-green);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em; 
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+.meetings-list-container ul {
+  list-style: none; 
+  padding: 0;
+  margin: 0;
+  flex-grow: 1; 
+  overflow-y: auto; 
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-green) var(--secondary-dark-bg);
+}
+
+/* Estilos para a barra de rolagem de ul dentro de meetings-list-container */
+.meetings-list-container ul::-webkit-scrollbar {
     width: 8px;
 }
-
-.drivers-list-scrollable::-webkit-scrollbar-track {
+.meetings-list-container ul::-webkit-scrollbar-track {
     background: var(--secondary-dark-bg);
     border-radius: 10px;
 }
-
-.drivers-list-scrollable::-webkit-scrollbar-thumb {
+.meetings-list-container ul::-webkit-scrollbar-thumb {
     background-color: var(--accent-green);
     border-radius: 10px;
     border: 2px solid var(--secondary-dark-bg);
 }
 
-.driver-list-item {
-    display: grid;
-    grid-template-columns: 0.5fr 1.5fr 1fr; /* Deve ser consistente com o header */
-    gap: 10px;
-    text-align: left;
-    background-color: var(--button-bg);
-    border-radius: 5px;
-    padding: 8px 10px;
-    margin-bottom: 8px;
-    font-size: 0.6em;
-    color: var(--text-light);
-    transition: background-color 0.2s ease;
-    font-family: 'Formula1 Display Bold', sans-serif;
+
+.meeting-list-item {
+  background-color: var(--button-bg); 
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 8px; 
+  color: var(--text-light);
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 0.8em; 
+  cursor: pointer; 
+  transition: background-color 0.2s ease;
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
 }
 
-.driver-list-item:hover {
-    background-color: var(--button-hover);
+.meeting-list-item:last-child {
+  margin-bottom: 0; 
 }
 
-/* Estilos para o container do mapa da pista (dentro do Quadrante 3) */
-.track-map-container {
-    width: 100%;
-    height: 100%; /* Ocupa 100% da altura do quadrante pai */
+.meeting-list-item:hover {
+  background-color: var(--button-hover);
+}
+
+.header-nav-item-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* --- Media Queries para Responsividade --- */
+@media (max-width: 768px) { 
+  .header-nav {
+    display: none; 
+  }
+
+  .hamburger-menu-button {
+    display: block; 
+  }
+
+  .main-header {
+    flex-direction: row; 
+    justify-content: space-between;
+  }
+
+  .header-logo {
+    text-align: left; 
+  }
+
+  .main-header .hamburger-menu-button {
+    order: -1; 
+  }
+
+  .main-header .header-logo {
+    flex-grow: 1; 
+    text-align: center; 
+    padding-left: 10px; 
+    padding-right: 10px; 
+  }
+
+  /* Sidebar para Mobile (Menu Hambúrguer) - REFORÇADO PARA OCULTAÇÃO NO DESKTOP */
+  .mobile-sidebar {
+    position: fixed;
+    top: 0;
+    left: -100%; 
+    width: var(--mobile-menu-width);
+    height: 100vh;
+    background-color: var(--sidebar-bg); 
+    box-shadow: 2px 0 10px rgba(0,0,0,0.7);
+    transition: left 0.3s ease-in-out, opacity 0.3s ease, visibility 0.3s ease; 
+    z-index: 1000; 
+    display: flex; /* Mantido display:flex por padrão para mobile */
+    flex-direction: column;
+    padding-top: var(--header-height);
+    
+    visibility: hidden; 
+    opacity: 0; 
+    pointer-events: none; 
+  }
+
+  /* REFORÇO: Oculta o mobile-sidebar e overlay em telas MAIORES que mobile */
+  /* Esta regra é a mais importante para ocultar no desktop */
+  @media (min-width: 769px) { 
+    .mobile-sidebar,
+    .mobile-menu-overlay {
+      display: none !important; /* Força a ocultação no desktop */
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .hamburger-menu-button { /* Garante que o botão hambúrguer esteja oculto no desktop */
+      display: none !important;
+    }
+  }
+
+
+  .mobile-sidebar.open {
+    left: 0; 
+    visibility: visible; 
+    opacity: 1; 
+    pointer-events: auto; 
+  }
+
+  .mobile-sidebar-nav {
     display: flex;
     flex-direction: column;
-    align-items: center; /* Centraliza o conteúdo horizontalmente */
-    justify-content: flex-start; /* Alinha o conteúdo ao topo (título e depois o mapa) */
+    padding: 20px;
+  }
 
-    /* Para que o container do mapa se funda com o fundo do quadrante, como os outros itens de lista */
-    background-color: transparent;
-    border: none;
-    padding: 0;
-}
+  .mobile-sidebar-nav a.mobile-sidebar-nav-item,
+  .mobile-sidebar-nav a.mobile-sidebar-nav-item:link,
+  .mobile-sidebar-nav a.mobile-sidebar-nav-item:visited,
+  .mobile-sidebar-nav a.mobile-sidebar-nav-item:hover,
+  .mobile-sidebar-nav a.mobile-sidebar-nav-item:active {
+    color: var(--text-light) !important; /* FORÇA A COR BRANCA */
+    font-family: 'Formula1 Display Regular', sans-serif;
+    font-size: 1.2em;
+    text-decoration: none !important; /* FORÇA A REMOÇÃO DO SUBLINHADO */
+    padding: 15px 0;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.3s ease;
+    position: relative; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+  }
 
-/* Estilos para o título do mapa da pista */
-.track-map-container h4 {
-    color: var(--accent-green); /* Cor verde neon, consistente com outros títulos */
-    margin-top: 0;
-    margin-bottom: 10px; /* Espaço abaixo do título */
-    font-size: 0.9em; /* Tamanho da fonte */
-    text-align: center;
-}
+  .mobile-sidebar-nav a.mobile-sidebar-nav-item:hover {
+    background-color: var(--button-hover);
+  }
 
-/* Estilos para o container dos controles de navegação de telemetria */
-.telemetry-navigation-controls {
+  /* Ajuste do dropdown para mobile */
+  .year-dropdown.mobile-dropdown {
+    position: absolute; 
+    top: 0; 
+    left: 100%; 
+    transform: translateX(10px); 
+    min-width: 120px; 
+    
+    padding: 10px 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    background-color: var(--secondary-dark-bg);
+    z-index: 1002; 
+    
     display: flex;
-    justify-content: center; /* Centraliza os botões horizontalmente */
-    align-items: center; /* Alinha verticalmente os itens */
-    gap: 15px; /* Espaçamento entre os botões e o texto de tempo */
-    margin-top: 15px; /* Margem acima dos controles para separar do gráfico */
-    width: 100%; /* Ocupa a largura total do container pai */
-    padding-top: 10px; /* Padding acima para um pequeno espaço */
-    border-top: 1px solid var(--border-color); /* Linha divisória fina no topo */
+    flex-direction: column;
+  }
+
+  /* Overlay para quando o menu mobile está aberto */
+  .mobile-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0,0,0,0.5); 
+    z-index: 999; 
+    
+    visibility: hidden; 
+    opacity: 0; 
+    transition: opacity 0.3s ease; 
+  }
+
+  .mobile-menu-overlay.open {
+    display: block; 
+    visibility: visible; 
+    opacity: 1; 
+  }
 }
 
-/* Estilos para os botões de navegação (-10m, +10m) */
-.telemetry-nav-button {
-    background-color: var(--button-bg); /* Fundo dos botões, consistente com outros botões */
-    color: var(--text-light); /* Cor do texto claro */
-    border: none;
-    padding: 8px 12px;
-    border-radius: 5px; /* Bordas arredondadas */
-    cursor: pointer;
-    font-size: 0.6em;
-    font-family: 'Formula1 Display Bold', sans-serif;
-    transition: background-color 0.2s ease; /* Transição suave no hover */
+/* Container para o layout lado a lado de Meetings e Sessions */
+.content-display-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+  justify-content: flex-start; /* <<< MUDADO AQUI TAMBÉM: para alinhar os itens internos (Meetings e Sessions) à esquerda deles mesmos */
+  align-items: flex-start;
+  width: 100%; /* para que o content-display-layout não ocupe toda a largura */
+  /*max-width: 1200px; /* Mantém um limite superior */
+  padding-left: 0px; /* Exemplo: um padding de 20px na esquerda */
+  padding-right: 20px; /* Para simetria ou se houver algo na direita */
 }
 
-.telemetry-nav-button:hover {
-    background-color: var(--button-hover); /* Fundo no hover */
+/* Painel lateral que contém o título, botão e o componente Sessions */
+.sessions-side-panel {
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-light);
+  min-width: 300px; /* Largura mínima para o painel das sessões, ajuste conforme necessário */
+  flex-shrink: 0; /* Impede que ele encolha */
+  max-width: 300px; /* Largura máxima para o painel de sessões, ajuste conforme necessário */
+  height: 40vh;
+  overflow-y: auto;
 }
 
-/* Estilos para a exibição da hora atual da telemetria */
-.telemetry-current-time {
-    color: var(--accent-green); /* Cor de destaque (verde neon) */
-    font-weight: bold;
-    font-size: 0.9em;
-    font-family: 'Formula1 Display Bold', sans-serif;
-    white-space: nowrap; /* Evita quebra de linha do tempo */
+.sessions-side-panel h2 {
+  text-align: center;
+  color: var(--accent-green);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+.sessions-side-panel .back-button {
+  background-color: var(--button-bg);
+  color: var(--text-light);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 15px;
+  margin-bottom: 0px; /* Espaço entre o botão e a lista de sessões */
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 0.9em;
+  align-self: flex-start; /* Alinha o botão à esquerda dentro do painel */
+}
+
+.sessions-side-panel .back-button:hover {
+  background-color: var(--button-hover);
+  color: var(--accent-green);
+}
+
+/* Estilos para o conteúdo interno da lista de sessões (o componente Sessions.js em si) */
+/* Agora, o padding, background e shadow são controlados por .sessions-side-panel */
+.sessions-container-box {
+  display: flex;
+  flex-direction: column;
+  color: var(--text-light);
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-green) var(--secondary-dark-bg);
+}
+
+.session-list-item {
+  background-color: var(--button-bg); 
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 8px; 
+  color: var(--text-light);
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 0.8em; 
+  cursor: pointer; 
+  transition: background-color 0.2s ease;
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  text-decoration: none;
+}
+
+.session-list-item:last-child {
+  margin-bottom: 0; 
+}
+
+.session-list-item:hover {
+  background-color: var(--button-hover);
+}
+
+.meeting-list-item.active {
+  background-color: var(--accent-green); /* Fundo verde, como o h2 */
+  color: var(--primary-dark-bg); /* Texto escuro para contraste */
+  /* font-weight: bold; Opcional: para destacar mais */
+}
+
+.session-list-item.active {
+  background-color: var(--accent-green);
+  color: var(--primary-dark-bg);
+  font-weight: bold;
+}
+
+@media (max-width: 1024px) {
+  .track-map-weather-panel {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;              /* Ocupa o espaço restante do pai */
+    height: 100%;              /* Garante altura total disponível */
+    max-height: 100%;          /* Evita ultrapassar */
+    overflow: hidden;          /* Previne scroll interno indesejado */
+  }  
+
+  .content-display-layout {
+    flex-direction: column; /* Em telas menores, os painéis ficam um abaixo do outro */
+    align-items: center; /* Centraliza os painéis quando estão em coluna */
+  }
+}
+
+/* --- Estilos para o componente CircuitMapPanel --- */
+.circuit-map-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 10px;
+  color: var(--text-light);
+  min-width: 300px; /* Largura mínima para o painel do mapa, ajuste conforme necessário */
+  flex-shrink: 0; /* Impede que ele encolha */
+  width: 720px; /* Largura máxima para o painel do mapa, ajuste conforme necessário */
+  flex-grow: 1;
+  height: 100%;
+  max-height: 100%; /* Limita o painel, evita SVG estourar tudo */
+  overflow: hidden; /* Garante que ele não "transborde" */
+}
+
+.circuit-map-panel h2 {
+  text-align: center;
+  color: var(--accent-green);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif;
+  width: 100%;
+}
+
+/* --- Estilos para o container do SVG do Circuito --- */
+.circuit-svg-container {
+  flex-grow: 1; /* Permite que o container do SVG ocupe o espaço restante verticalmente */
+  display: flex;
+  justify-content: center; /* Centraliza o SVG horizontalmente */
+  align-items: center; /* Centraliza o SVG verticalmente */
+  width: 100%; /* Garante que o container ocupe toda a largura disponível */
+  overflow: hidden; /* Garante que nada transborde */
+  position: relative;
+}
+
+.circuit-svg { /* Esta é a classe no seu <object> */
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
 }
 

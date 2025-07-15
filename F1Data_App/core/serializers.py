@@ -1,6 +1,6 @@
 # G:\Learning\F1Data\F1Data_App\core\serializers.py
 from rest_framework import serializers
-from .models import Meetings, Sessions, Drivers, Weather, SessionResult, Laps, Pit, Stint, Position, Intervals, RaceControl, TeamRadio, CarData, Location
+from .models import Meetings, Sessions, Drivers, Weather, SessionResult, Laps, Pit, Stint, Position, Intervals, RaceControl, TeamRadio, CarData, Location, Circuit
 
 from django.db.models import Model
 
@@ -15,13 +15,13 @@ class MeetingFilterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Meetings
-        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'meeting_official_name', 'display_name']
+        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key', 'meeting_official_name', 'display_name']
 
     def get_display_name(self, obj):
         if isinstance(obj, Model):
             country_name = obj.country_name
             meeting_name = obj.meeting_name
-            circuit_short_name = obj.circuit_short_namea
+            circuit_short_name = obj.circuit_short_name
         else:
             country_name = obj.get('country_name', 'N/A')
             meeting_name = obj.get('meeting_name', 'N/A')
@@ -42,7 +42,7 @@ class MeetingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Meetings
-        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'meeting_official_name', 'display_name']
+        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key', 'meeting_official_name', 'display_name']
 
     def get_display_name(self, obj):
         return f"{obj.country_name} - {obj.meeting_name} - {obj.circuit_short_name}"
@@ -130,3 +130,12 @@ class LocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Location
         fields = ['session_key', 'driver_number', 'date', 'z', 'x', 'y']
+        
+# Serializer para Circuit
+class CircuitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Circuit
+        fields = ['circuitid','circuitref','name','location','country','lat','lng','alt','url']
+
+
+        

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone  # timezone do datetime
 from django.utils import timezone as django_timezone  # django.utils.timezone
 from rest_framework.exceptions import ValidationError
  
-from .models import Meetings, Sessions, Drivers, Weather, SessionResult, Laps, Pit, Stint, Position, Intervals, RaceControl, TeamRadio, CarData, Location
+from .models import Meetings, Sessions, Drivers, Weather, SessionResult, Laps, Pit, Stint, Position, Intervals, RaceControl, TeamRadio, CarData, Location, Circuit
 
 from .serializers import (
     YearSerializer,
@@ -22,7 +22,7 @@ from .serializers import (
     SessionResultSerializer,
     LapsSerializer, PitSerializer, StintSerializer, PositionSerializer,
     IntervalsSerializer, RaceControlSerializer, TeamRadioSerializer, CarDataSerializer, LocationSerializer,
-    MeetingSerializer
+    MeetingSerializer, CircuitSerializer
 )
 
 # API para obter anos e meetings filtrados
@@ -34,7 +34,7 @@ class MeetingFilterAPIView(APIView):
             try:
                 selected_year = int(selected_year)
                 meetings_queryset = Meetings.objects.filter(year=selected_year).values(
-                    'meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name'
+                    'meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key'
                 ).distinct().order_by('meeting_key')
 
                 serializer = MeetingFilterSerializer(meetings_queryset, many=True)
@@ -283,3 +283,21 @@ class LocationListBySessionAndDriver(generics.ListAPIView):
             date__gte=date,
             date__lt=date_limit
         ).order_by('date')
+        
+#Endpoint para listar circuitos filtrados por circuit_key
+class CircuitDetailByCircuitID(generics.RetrieveAPIView):
+    serializer_class = CircuitSerializer
+
+    def get_object(self):
+        circuit_key = self.request.query_params.get('circuit_key', None)
+        if circuit_key is None:
+            raise ValidationError({"error": "O parâmetro 'circuit_key' é obrigatório."})
+        try:
+            circuit_key = int(circuit_key)
+        except ValueError:
+            raise ValidationError({"error": "O parâmetro 'circuit_key' deve ser um número inteiro."})
+        
+        try:
+            return Circuit.objects.get(circuitid=circuit_key)
+        except Circuit.DoesNotExist:
+            raise ValidationError({"error": f"Circuito com circuitid={circuit_key} não encontrado."})

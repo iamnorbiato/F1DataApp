@@ -352,3 +352,22 @@ class StartingGrid(models.Model):
 
     def __str__(self):
         return f"Starting Grid: Mtg {self.meeting_key}, Sess {self.session_key}, Driver {self.driver_number}, Pos {self.position}"
+    
+class Circuit(models.Model):
+    circuitid = models.IntegerField(primary_key=True)
+    circuitref = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=50, null=True, db_column='name')
+    location = models.CharField(max_length=50, null=True)
+    country = models.CharField(max_length=50, null=True)
+    lat = models.FloatField(null=True)
+    lng = models.FloatField(null=True)
+    alt = models.IntegerField(null=True)
+    url = models.CharField(max_length=128, null=True)
+
+    class Meta:
+        managed = False  # Django não controla criação/alteração da tabela
+        db_table = 'f1data"."circuits'  # schema + tabela
+        unique_together = (('circuitref',),)  # índice único para circuitref (opcional, já tem unique=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.circuitref})"
