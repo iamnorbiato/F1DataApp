@@ -1,4 +1,4 @@
-/* G:\Learning\F1Data\F1Data_Web\src\App.css V23 */
+/* G:\Learning\F1Data\F1Data_Web\src\App.css V24 */
 
 /* Variáveis de Tema (Reaproveitadas) */
 :root {
@@ -135,7 +135,7 @@ a.header-nav-item:hover {
 /* --- Conteúdo Principal (Abaixo do Header) --- */
 .main-content-area {
   flex-grow: 1;
-  padding: 20px; /* Mantém o padding da área principal */
+  padding: 10px; /* Mantém o padding da área principal */
   background-color: var(--primary-dark-bg);
   display: flex;
   justify-content: flex-start; /* <<< ALTERADO: Alinha o conteúdo (content-display-layout) à esquerda */
@@ -197,7 +197,7 @@ a.header-nav-item:hover {
   background-color: var(--secondary-dark-bg);
   border-radius: 12px;
   box-shadow: 0 4px 12px var(--shadow-color);
-  padding: 20px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   min-height: 220px;
@@ -436,7 +436,7 @@ a.header-nav-item:hover {
   background-color: var(--secondary-dark-bg);
   border-radius: 12px;
   box-shadow: 0 4px 12px var(--shadow-color);
-  padding: 20px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   color: var(--text-light);
@@ -553,7 +553,7 @@ a.header-nav-item:hover {
   color: var(--text-light);
   min-width: 300px; /* Largura mínima para o painel do mapa, ajuste conforme necessário */
   flex-shrink: 0; /* Impede que ele encolha */
-  width: 720px; /* Largura máxima para o painel do mapa, ajuste conforme necessário */
+  width: 755px; /* Largura máxima para o painel do mapa, ajuste conforme necessário */
   flex-grow: 1;
   height: 100%;
   max-height: 100%; /* Limita o painel, evita SVG estourar tudo */
@@ -592,4 +592,79 @@ a.header-nav-item:hover {
   object-fit: contain;
   display: block;
 }
+
+.session-results-panel {
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 10px;
+  color: var(--text-light);
+  min-width: 300px;
+  max-width: 400px;
+  flex-shrink: 0;
+  height: 100%;
+  overflow-y: auto;
+  margin-left: 10px;
+}
+
+.session-results-panel h2 {
+  text-align: center;
+  color: var(--accent-green);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+.session-results-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.session-results-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background-color: var(--button-bg);
+  border-radius: 5px;
+  margin-bottom: 8px;
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease;
+}
+
+.session-results-item:hover {
+  background-color: var(--button-hover);
+}
+
+.session-results-item .position {
+  font-weight: bold;
+  color: var(--accent-green);
+}
+
+.session-results-item .pilot {
+  color: var(--text-light);
+}
+
+.left-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+  max-width: 620px; /* 300 + 300 + margem */
+}
+
+.results-panel-wrapper {
+  width: 100%;
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 10px;
+  color: var(--text-light);
+  overflow-y: auto;
+}
+
 
