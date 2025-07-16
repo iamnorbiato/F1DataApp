@@ -1,9 +1,7 @@
 /* G:\Learning\F1Data\F1Data_Web\src\MeetingsList.js V22 */
 import React, { useState, useEffect } from 'react';
 
-// INÍCIO DA ALTERAÇÃO: selectedMeetingKey adicionado às props
 function MeetingsList({ selectedYear, onMeetingSelect, selectedMeetingKey }) {
-// FIM DA ALTERAÇÃO
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

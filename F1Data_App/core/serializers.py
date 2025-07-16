@@ -73,7 +73,7 @@ class WeatherSerializer(serializers.ModelSerializer):
 class SessionResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = SessionResult
-        fields = ['session_key', 'driver_number', 'position', 'grid_position', 'fastest_lap_time', 'fastest_lap_speed', 'points', 'laps_completed'] 
+        fields = ['position','driver_number','time_gap','number_of_laps','meeting_key','session_key'] 
         
 # Serializer para Laps
 class LapsSerializer(serializers.ModelSerializer):

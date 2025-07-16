@@ -39,8 +39,6 @@ function Weather({ selectedSessionKey }) {
     fetchWeatherData();
   }, [selectedSessionKey, API_BASE_URL]);
 
-  // NOVO: Selecione o item de clima que você quer exibir
-  // Por exemplo, o primeiro item do array (o mais antigo)
   const currentWeatherData = weatherData && weatherData.length > 0 ? weatherData[0] : null;
 
   return (
