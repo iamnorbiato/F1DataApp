@@ -112,21 +112,15 @@ function App() {
   return (
     <div className="App">
       <header className="main-header">
-        <a href="/" className="header-logo">
-          tsalbouDTA
-        </a>
+        <a href="/" className="header-logo">tsalbouDTA</a>
         <nav className="header-nav">
           <div className="header-nav-item-wrapper">
-            <a href="/corridas" className="header-nav-item" onClick={handleRacesClick}>
-              Corridas
-            </a>
+            <a href="/corridas" className="header-nav-item" onClick={handleRacesClick}>Corridas</a>
             {showYearDropdown && (
               <div className="year-dropdown desktop-dropdown">
                 {availableYears.length > 0 ? (
                   availableYears.map(year => (
-                    <div key={year} className="year-dropdown-item" onClick={() => handleYearSelect(year)}>
-                      {year}
-                    </div>
+                    <div key={year} className="year-dropdown-item" onClick={() => handleYearSelect(year)}>{year}</div>
                   ))
                 ) : (
                   <p>Carregando anos...</p>
@@ -134,83 +128,54 @@ function App() {
               </div>
             )}
           </div>
-
           <a href="/equipes" className="header-nav-item">Equipes</a>
           <a href="/pilotos" className="header-nav-item">Pilotos</a>
           <a href="/circuitos" className="header-nav-item">Circuitos</a>
           <a href="/telemetria" className="header-nav-item">Telemetria</a>
         </nav>
-        <button className="hamburger-menu-button" onClick={handleHamburgerClick}>
-          &#9776;
-        </button>
+        <button className="hamburger-menu-button" onClick={handleHamburgerClick}>&#9776;</button>
       </header>
 
-      <nav className={`mobile-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-        <button className="hamburger-menu-button" onClick={handleCloseMobileMenu} style={{ position: 'absolute', top: '10px', right: '15px' }}>
-          &times;
-        </button>
-        <div className="mobile-sidebar-nav">
-          <a href="/corridas" className="mobile-sidebar-nav-item" onClick={handleRacesClick}>Corridas
-            {showYearDropdown && (
-              <div className="year-dropdown mobile-dropdown">
-                {availableYears.length > 0 ? (
-                  availableYears.map(year => (
-                    <div key={year} className="year-dropdown-item" onClick={() => handleYearSelect(year)}>
-                      {year}
-                    </div>
-                  ))
-                ) : (
-                  <p>Carregando anos...</p>
-                )}
-              </div>
-            )}
-          </a>
-          <a href="/equipes" className="mobile-sidebar-nav-item" onClick={handleCloseMobileMenu}>Equipes</a>
-          <a href="/pilotos" className="mobile-sidebar-nav-item" onClick={handleCloseMobileMenu}>Pilotos</a>
-          <a href="/circuitos" className="mobile-sidebar-nav-item" onClick={handleCloseMobileMenu}>Circuitos</a>
-          <a href="/telemetria" className="mobile-sidebar-nav-item" onClick={handleCloseMobileMenu}>Telemetria</a>
-        </div>
-      </nav>
-
-      <div className={`mobile-menu-overlay ${isMobileMenuOpen ? 'open' : ''}`} onClick={handleCloseMobileMenu}></div>
-
       <main className="main-content-area">
-        {selectedYear ? (
-          <div className="content-display-layout">
-            <MeetingsList selectedYear={selectedYear} onMeetingSelect={handleMeetingSelect} selectedMeetingKey={selectedMeetingKey} />
-
-            {selectedMeetingKey && (
-              <div className="sessions-side-panel">
-                <h2>Sessões de {selectedCircuitShortName || selectedMeetingName || 'Corrida Selecionada'}</h2>
-
-                <Sessions
-                  meetingKey={selectedMeetingKey}
-                  onSessionSelect={handleSessionSelect}
-                  selectedSessionKey={selectedSessionKey}
-                />
-
-              </div>
-            )}
+        {selectedYear && (
+          <div className="main-grid-layout">
+            <div className="left-panel-group-horizontal">
+              <MeetingsList
+                selectedYear={selectedYear}
+                onMeetingSelect={handleMeetingSelect}
+                selectedMeetingKey={selectedMeetingKey}
+              />
+              {selectedMeetingKey && (
+                <div className="sessions-side-panel">
+                  <h2>Sessões de {selectedCircuitShortName || selectedMeetingName || 'Corrida Selecionada'}</h2>
+                  <Sessions
+                    meetingKey={selectedMeetingKey}
+                    onSessionSelect={handleSessionSelect}
+                    selectedSessionKey={selectedSessionKey}
+                  />
+                </div>
+              )}
+            </div>
 
             {selectedSessionKey && circuitRef && (
-              <div className="track-map-weather-panel">
+              <div className="circuit-map-panel">
                 <CircuitMapPanel
                   circuitref={circuitRef}
                   selectedSessionKey={selectedSessionKey}
                   circuitShortName={selectedCircuitShortName}
                 />
-                <SessionResultsPanel sessionKey={selectedSessionKey} />
               </div>
             )}
 
-
+            {selectedSessionKey && (
+              <div className="rsession-results-panel">
+                <SessionResultsPanel sessionKey={selectedSessionKey} />
+              </div>
+            )}
           </div>
-        ) : (
-          null
         )}
       </main>
     </div>
-
   );
 }
 
