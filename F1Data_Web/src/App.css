@@ -100,7 +100,7 @@ code {
 /* Menu de Navegação Desktop */
 .header-nav {
   display: flex; 
-  gap: 10px; 
+  gap: 5px; 
   flex-grow: 1; 
   justify-content: flex-start;
   padding-left: 20px; 
@@ -540,6 +540,9 @@ a.header-nav-item:hover {
   height: 100%;
   max-height: 100%; /* Limita o painel, evita SVG estourar tudo */
   overflow: hidden; /* Garante que ele não "transborde" */
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+
 }
 
 .circuit-map-panel h2 {
@@ -552,20 +555,24 @@ a.header-nav-item:hover {
   padding-bottom: 10px;
   font-family: 'Formula1 Display Bold', sans-serif;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .session-results-panel {
   background-color: var(--secondary-dark-bg);
   border-radius: 12px;
   box-shadow: 0 4px 12px var(--shadow-color);
-  padding: 10px;
+  padding: 10px; /* Mantém o padding do painel inteiro */
   color: var(--text-light);
   min-width: 300px;
-  max-width: 660px;
+  max-width: 660px; /* Ajuste se quiser um max-width mais próximo de MeetingsList (400px) */
   flex-shrink: 0;
-  height: 100%;
-  overflow-y: auto;
   margin-left: 0px;
+  display: flex; /* Transforma o painel em um contêiner flexível */
+  flex-direction: column; /* Organiza os itens (h2 e conteúdo) em coluna */
+  height: auto;
+  min-height: 220px; /* Mesma altura mínima do meetings-list-container */
+  max-height: 40vh; /* Mesma altura máxima do meetings-list-container */
 }
 
 .session-results-panel h2 {
@@ -618,29 +625,24 @@ a.header-nav-item:hover {
 .left-panel-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 5px;
   flex-shrink: 0;
   max-width: 620px; /* 300 + 300 + margem */
 }
 
 .results-panel-wrapper {
   width: 100%;
-  background-color: var(--secondary-dark-bg);
   border-radius: 12px;
-  box-shadow: 0 4px 12px var(--shadow-color);
   padding: 10px;
   color: var(--text-light);
   overflow-y: auto;
 }
 
-
-
-
 .main-grid-layout {
   display: grid;
   grid-template-columns: 2fr 3fr;
   grid-template-rows: auto auto;
-  gap: 10px;
+  gap: 5px;
   width: 100%;
   padding: 10px;
   box-sizing: border-box;
@@ -651,12 +653,7 @@ a.header-nav-item:hover {
   grid-row: 1 / 2;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.circuit-map-panel {
-  grid-column: 2 / 3;
-  grid-row: 1 / 3;
+  gap: 5px;
 }
 
 .results-panel-wrapper {
@@ -668,5 +665,45 @@ a.header-nav-item:hover {
 .left-panel-group-horizontal {
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  gap: 5px;
+}
+
+.session-results-panel::-webkit-scrollbar {
+    width: 8px;
+}
+.session-results-panel::-webkit-scrollbar-track {
+    background: var(--secondary-dark-bg);
+    border-radius: 10px;
+}
+.session-results-panel::-webkit-scrollbar-thumb {
+    background-color: var(--accent-green);
+    border-radius: 10px;
+    border: 2px solid var(--secondary-dark-bg);
+}
+
+.session-results-content {
+  flex-grow: 1; /* Faz com que esta div ocupe todo o espaço vertical disponível */
+  overflow-y: auto; /* AQUI é onde o scroll vertical acontecerá */
+  overflow-x: hidden; /* Evita scroll horizontal */
+  scrollbar-width: thin; /* Para Firefox */
+  scrollbar-color: var(--accent-green) var(--secondary-dark-bg); /* Para Firefox */
+}
+
+.session-results-content::-webkit-scrollbar {
+    width: 8px;
+}
+.session-results-content::-webkit-scrollbar-track {
+    background: var(--secondary-dark-bg);
+    border-radius: 10px;
+}
+.session-results-content::-webkit-scrollbar-thumb {
+    background-color: var(--accent-green);
+    border-radius: 10px;
+    border: 2px solid var(--secondary-dark-bg);
+}
+
+.session-results-content .session-results-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }

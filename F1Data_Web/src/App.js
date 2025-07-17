@@ -168,12 +168,12 @@ function App() {
             )}
 
             {selectedSessionKey && (
-              <div className="rsession-results-panel">
+              <div className="session-results-panel">
                 <SessionResultsPanel sessionKey={selectedSessionKey} />
               </div>
             )}
           </div>
-        )}
+      )}
       </main>
     </div>
   );

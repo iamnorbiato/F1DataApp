@@ -6,7 +6,7 @@ function Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:30080';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://home:300080';
 
   useEffect(() => {
     const fetchSessions = async () => {
