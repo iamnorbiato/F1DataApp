@@ -5,6 +5,7 @@ import './App.css';
 import MeetingsList from './MeetingsList';
 import Sessions from './Sessions';
 import CircuitMapPanel from './CircuitMapPanel';
+import SessionResultsPanel from './SessionResultsPanel';
 
 function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -193,10 +194,16 @@ function App() {
 
             {selectedSessionKey && circuitRef && (
               <div className="track-map-weather-panel">
-                <CircuitMapPanel circuitref={circuitRef} selectedSessionKey={selectedSessionKey}
-                circuitShortName={selectedCircuitShortName}/>
+                <CircuitMapPanel
+                  circuitref={circuitRef}
+                  selectedSessionKey={selectedSessionKey}
+                  circuitShortName={selectedCircuitShortName}
+                />
+                <SessionResultsPanel sessionKey={selectedSessionKey} />
               </div>
             )}
+
+
           </div>
         ) : (
           null

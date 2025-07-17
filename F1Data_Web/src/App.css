@@ -326,8 +326,6 @@ a.header-nav-item:hover {
     pointer-events: none; 
   }
 
-  /* REFORÇO: Oculta o mobile-sidebar e overlay em telas MAIORES que mobile */
-  /* Esta regra é a mais importante para ocultar no desktop */
   @media (min-width: 769px) { 
     .mobile-sidebar,
     .mobile-menu-overlay {
@@ -524,22 +522,6 @@ a.header-nav-item:hover {
   font-weight: bold;
 }
 
-@media (max-width: 1024px) {
-  .track-map-weather-panel {
-    display: flex;
-    flex-direction: column;
-    flex-grow: 1;              /* Ocupa o espaço restante do pai */
-    height: 100%;              /* Garante altura total disponível */
-    max-height: 100%;          /* Evita ultrapassar */
-    overflow: hidden;          /* Previne scroll interno indesejado */
-  }  
-
-  .content-display-layout {
-    flex-direction: column; /* Em telas menores, os painéis ficam um abaixo do outro */
-    align-items: center; /* Centraliza os painéis quando estão em coluna */
-  }
-}
-
 /* --- Estilos para o componente CircuitMapPanel --- */
 .circuit-map-panel {
   display: flex;
@@ -570,27 +552,6 @@ a.header-nav-item:hover {
   padding-bottom: 10px;
   font-family: 'Formula1 Display Bold', sans-serif;
   width: 100%;
-}
-
-/* --- Estilos para o container do SVG do Circuito --- */
-.circuit-svg-container {
-  flex-grow: 1; /* Permite que o container do SVG ocupe o espaço restante verticalmente */
-  display: flex;
-  justify-content: center; /* Centraliza o SVG horizontalmente */
-  align-items: center; /* Centraliza o SVG verticalmente */
-  width: 100%; /* Garante que o container ocupe toda a largura disponível */
-  overflow: hidden; /* Garante que nada transborde */
-  position: relative;
-}
-
-.circuit-svg { /* Esta é a classe no seu <object> */
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-  display: block;
 }
 
 .session-results-panel {
@@ -625,16 +586,21 @@ a.header-nav-item:hover {
 }
 
 .session-results-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 10px;
-  background-color: var(--button-bg);
+  background-color: var(--button-bg); 
   border-radius: 5px;
-  margin-bottom: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px; 
+  color: var(--text-light);
   font-family: 'Formula1 Display Regular', sans-serif;
-  font-size: 0.9em;
+  font-size: 0.8em; 
+  cursor: pointer; 
   transition: background-color 0.2s ease;
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  text-decoration: none;
 }
+
 
 .session-results-item:hover {
   background-color: var(--button-hover);
