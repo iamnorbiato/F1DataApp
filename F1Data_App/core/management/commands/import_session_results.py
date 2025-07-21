@@ -1,4 +1,5 @@
 # G:\Learning\F1Data\F1Data_App\core\management\commands\import_session_results.py
+
 import requests
 import json
 from datetime import datetime
@@ -8,18 +9,21 @@ import time
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
 from django.conf import settings 
+from django.db.models import Q # Importado para usar Q objects para filtragem
+from django.db.models.functions import Cast # Importado para tratamento de tipos no ORM
+from django.db.models import F, Case, When, Value, IntegerField # Importados para tratamento de tipos no ORM
 
-from core.models import Drivers, Sessions, SessionResult 
+from core.models import Drivers, Sessions, SessionResult # Garanta que SessionResult e Drivers estão corretos
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
+from update_token import update_api_token_if_needed # Assumindo que este script gerencia a validade do token
 import pytz # Para manipulação de fusos horários
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') 
 
 class Command(BaseCommand):
-    help = 'Importa dados de resultados de sessão (session_results) da API OpenF1 e os insere na tabela sessionresult do PostgreSQL usando ORM.'
+    help = 'Importa dados de resultados de sessão (session_results) da API OpenF1 e os insere/atualiza na tabela sessionresult do PostgreSQL.'
 
-    API_URL = "https://api.openf1.org/v1/session_result" # URL da API para session_results
+    API_URL = "https://api.openf1.org/v1/session_result"
     CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
 
     API_DELAY_SECONDS = 0.2
@@ -27,14 +31,14 @@ class Command(BaseCommand):
     API_RETRY_DELAY_SECONDS = 5 
     BULK_SIZE = 5000 
 
-    warnings_count = 0 # Contador total de avisos
-    all_warnings_details = [] # Lista para armazenar as mensagens detalhadas de aviso
+    warnings_count = 0 
+    all_warnings_details = [] 
 
     def add_warning(self, message):
         """Adiciona um aviso ao contador e à lista de detalhes."""
         self.warnings_count += 1
         self.all_warnings_details.append(message)
-        self.stdout.write(self.style.WARNING(message)) # Ainda mostra na tela se for um aviso
+        # self.stdout.write(self.style.WARNING(message)) # Suprimido para saída específica por sessão
 
     def get_config_value(self, key=None, default=None, section=None):
         config = {}
@@ -62,42 +66,45 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
 
-    def get_session_driver_triplets_to_process(self): 
-        self.stdout.write(self.style.MIGRATE_HEADING("Identificando triplas (M,S,D) para sessões 'Race' de drivers e 'sessionresult'..."))
-        
-        self.stdout.write("Buscando pares (meeting_key, session_key) de sessões 'Race'...")
-        race_sessions_pairs = set(
-            Sessions.objects.filter(session_type='Race').values_list('meeting_key', 'session_key')
-        )
-        self.stdout.write(f"Encontrados {len(race_sessions_pairs)} pares (meeting_key, session_key) para sessões 'Race'.")
+    # Este método agora não filtra mais por session_type='Race'
+    def get_session_driver_triplets_to_process(self, meeting_key_filter=None): 
+        # self.stdout.write(self.style.MIGRATE_HEADING("Identificando triplas (M,S,D) para sessões 'Race' e 'sessionresult'...")) # Suprimido
 
-        self.stdout.write("Buscando todas as triplas de drivers (meeting_key, session_key, driver_number) da tabela 'drivers'...")
+        # ORIGINAL: sessions_query = Sessions.objects.filter(session_type='Race')
+        # AGORA: Obtém todas as sessões, independentemente do tipo
+        sessions_query = Sessions.objects.all() 
+
+        if meeting_key_filter is not None:
+            sessions_query = sessions_query.filter(meeting_key=meeting_key_filter)
+
+        # Agora, race_sessions_pairs se torna all_sessions_pairs
+        all_sessions_pairs = set(sessions_query.values_list('meeting_key', 'session_key'))
+        # self.stdout.write(f"Encontrados {len(all_sessions_pairs)} pares (meeting_key, session_key) para TODAS as sessões (filtrado por meeting_key={meeting_key_filter if meeting_key_filter is not None else 'Todos'}).") # Suprimido
+
+        drivers_query = Drivers.objects.all()
+        if meeting_key_filter is not None:
+            drivers_query = drivers_query.filter(meeting_key=meeting_key_filter)
+
         all_driver_triplets = set(
-            Drivers.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
+            drivers_query.values_list('meeting_key', 'session_key', 'driver_number')
         )
-        self.stdout.write(f"Encontradas {len(all_driver_triplets)} triplas de drivers.")
+        # self.stdout.write(f"Encontradas {len(all_driver_triplets)} triplas de drivers.") # Suprimido
 
+        # relevant_driver_triplets agora inclui drivers de TODAS as sessões presentes em all_sessions_pairs
         relevant_driver_triplets = set(
-            (m, s, d) for m, s, d in all_driver_triplets if (m, s) in race_sessions_pairs
+            (m, s, d) for m, s, d in all_driver_triplets if (m, s) in all_sessions_pairs
         )
-        self.stdout.write(f"Filtradas {len(relevant_driver_triplets)} triplas de drivers para sessões 'Race'.")
+        # self.stdout.write(f"Filtradas {len(relevant_driver_triplets)} triplas de drivers para sessões relevantes.") # Suprimido
 
-        self.stdout.write("Buscando triplas já presentes na tabela 'sessionresult'...")
-        existing_sr_triplets = set(
-            SessionResult.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
-        )
-        self.stdout.write(f"Encontradas {len(existing_sr_triplets)} triplas já presentes na tabela 'sessionresult'.")
+        # Retorna todas as triplas elegíveis para serem processadas (sem filtro de existência aqui)
+        # A decisão de inserir/atualizar será feita no handle()
+        return sorted(list(relevant_driver_triplets))
 
-        triplets_to_process = sorted(list(relevant_driver_triplets - existing_sr_triplets))
-        
-        self.stdout.write(self.style.SUCCESS(f"Identificadas {len(triplets_to_process)} triplas (M,S,D) de drivers de sessões 'Race' que precisam de dados de resultados de sessão."))
-        return triplets_to_process
-
-    def fetch_session_results_data(self, session_key, use_token=True): # API filtra por session_key
+    def fetch_session_results_data(self, session_key, use_token=True):
         if not session_key:
             raise CommandError("session_key deve ser fornecido para buscar dados de resultados de sessão da API.")
 
-        url = f"{self.API_URL}?session_key={session_key}" # API filtra apenas por session_key
+        url = f"{self.API_URL}?session_key={session_key}"
 
         headers = {"Accept": "application/json"}
 
@@ -105,17 +112,17 @@ class Command(BaseCommand):
             api_token = os.getenv('OPENF1_API_TOKEN')
             if not api_token:
                 self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
-                raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
+                # Não levante CommandError aqui, apenas avise e deixe a requisição falhar naturalmente se necessário
             else:
                 headers["Authorization"] = f"Bearer {api_token}"
         else:
             self.add_warning("Uso do token desativado (use_token=False). Requisição será feita sem Authorization.")
-            pass
+            pass # continue sem token
 
         for attempt in range(self.API_MAX_RETRIES):
             try:
                 response = requests.get(url, headers=headers)
-                response.raise_for_status()
+                response.raise_for_status() # Lança HTTPError para 4xx/5xx
                 return response.json()
             except requests.exceptions.RequestException as e:
                 status_code = getattr(response, 'status_code', 'Unknown')
@@ -124,53 +131,89 @@ class Command(BaseCommand):
                     self.add_warning(f"Erro {status_code} da API para URL: {url}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos...")
                     time.sleep(delay)
                 else:
+                    self.add_warning(f"Falha na API para URL: {url} após {attempt + 1} tentativas: {e} (Status: {status_code}).")
                     return {"error_status": status_code,
                             "error_url": url,
                             "error_message": str(e)}
-            return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
+        return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
+    # MÉTODO build_session_result_instance agora inclui os novos campos da Model e tratamento de ArrayField
     def build_session_result_instance(self, sr_data_dict):
         """
-        Constrói uma instância de modelo SessionResult a partir de um dicionário de dados.
-        Retorna a instância do modelo ou None se o registro deve ser ignorado.
+        Constrói uma instância de modelo SessionResult a partir de um dicionário de dados da API.
+        Inclui todos os campos da nova estrutura do modelo e trata inconsistências de array.
         """
+        # O campo 'position' agora pode ser string, então não convertemos para int aqui.
         position = sr_data_dict.get('position') 
         driver_number = sr_data_dict.get('driver_number')
-        time_gap_raw = sr_data_dict.get('time_gap')
         number_of_laps = sr_data_dict.get('number_of_laps')
         meeting_key = sr_data_dict.get('meeting_key')
         session_key = sr_data_dict.get('session_key')
+        
+        # NOVOS CAMPOS DO JSON/MODEL SessionResult
+        dnf = sr_data_dict.get('dnf', False) 
+        dns = sr_data_dict.get('dns', False)
+        dsq = sr_data_dict.get('dsq', False)
 
-        # Validação crítica para campos NOT NULL na PK
+        # --- LÓGICA DE TRATAMENTO PARA ARRAY/NÃO-ARRAY DE DURATION E GAP_TO_LEADER ---
+        # Tratamento para 'duration': se não for array, torna-se [valor, None, None]
+        raw_duration = sr_data_dict.get('duration')
+        if raw_duration is None:
+            processed_duration = None
+        elif isinstance(raw_duration, list):
+            # Se já é uma lista, usa como está (ex: [87.943, 87.502, 86.983])
+            processed_duration = raw_duration
+        else:
+            # Se não é uma lista (ex: float único), transforma em [valor, None, None]
+            processed_duration = [raw_duration, None, None]
+
+        # Tratamento para 'gap_to_leader': se não for array, torna-se [valor, None, None]
+        raw_gap_to_leader = sr_data_dict.get('gap_to_leader')
+        if raw_gap_to_leader is None:
+            processed_gap_to_leader = None
+        elif isinstance(raw_gap_to_leader, list):
+            # Se já é uma lista, usa como está
+            processed_gap_to_leader = raw_gap_to_leader
+        else:
+            # Se não é uma lista (ex: float ou string única), transforma em [valor, None, None]
+            processed_gap_to_leader = [raw_gap_to_leader, None, None]
+        # --- FIM DA LÓGICA DE TRATAMENTO ---
+
+        # Validação crítica para campos NOT NULL na PK (meeting_key, session_key, driver_number)
+        # meeting_key é primary_key=True no Model, session_key e driver_number são NOT NULL no DB
         if any(val is None for val in [meeting_key, session_key, driver_number]):
             missing_fields = [k for k,v in {'meeting_key': meeting_key, 'session_key': session_key, 'driver_number': driver_number}.items() if v is None]
-            raise ValueError(f"Dados incompletos para SessionResult: faltam {missing_fields}. Dados: {sr_data_dict}")
+            self.add_warning(f"Dados incompletos para SessionResult: faltam {missing_fields}. Dados: {sr_data_dict}. Pulando registro.")
+            return None # Retorna None se dados da PK estiverem incompletos
         
-        # --- CORREÇÃO AQUI: Tratar position=None para 0 (se DDL for NOT NULL) ---
-#        if position is None:
-#            position = 0 # Valor padrão 0 se for None da API
-#            self.add_warning(f"Aviso: 'position' é null para Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}. Usando 0.")
-        # ------------------------------------------------------------------
-
-        # Tratamento de time_gap para string (CharField no modelo) ou 0.0 se não numérico
-#        time_gap_parsed = None # Deve ser None se não houver ou se não for string, para campos VARCHAR NULL
-#        if time_gap_raw is not None:
-#            try:
-                # Tenta converter para float para saber se é numérico (para aviso), mas armazena como string.
-#                float(str(time_gap_raw).replace(',', '.').strip()) 
-#                time_gap_parsed = str(time_gap_raw).strip() # Se é numérico, salva como string.
-#            except ValueError:
-#                self.add_warning(f"Aviso: Valor de 'time_gap' '{time_gap_raw}' não é numérico. Usando NULL para Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}.")
-#                time_gap_parsed = None # Se não for numérico, define como None
-        # Se time_gap_raw é None, time_gap_parsed já será None
-
         return SessionResult(
-            position=position,
+            position=position, # <-- Agora aceita string ou número (como string)
             driver_number=driver_number,
-            time_gap=time_gap_raw,
             number_of_laps=number_of_laps,
-            meeting_key=meeting_key,
-            session_key=session_key
+            # meeting_key é primary_key=True, então é usado aqui para identificar a instância
+            meeting_key=meeting_key, 
+            session_key=session_key, # session_key e driver_number são parte da unique_together
+            # NOVOS CAMPOS ADICIONADOS (agora usando os valores processados)
+            dnf=dnf,
+            dns=dns,
+            dsq=dsq,
+            duration=processed_duration, # <-- Usando o valor processado
+            gap_to_leader=processed_gap_to_leader # <-- Usando o valor processado
+        )
+
+    # Adiciona argumentos de linha de comando
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--meeting_key',
+            type=int,
+            help='Filtrar importação para um meeting_key específico.'
+        )
+        parser.add_argument(
+            '--mode',
+            type=str,
+            choices=['I', 'U'],
+            default='I',
+            help="Modo de operação: 'I' para inserir apenas novos (padrão), 'U' para forçar atualização de existentes e inserir novos."
         )
 
     def handle(self, *args, **options):
@@ -178,147 +221,192 @@ class Command(BaseCommand):
         self.warnings_count = 0
         self.all_warnings_details = [] # Zera a lista de detalhes de avisos para esta execução
 
+        # Obtém os valores dos argumentos passados
+        meeting_key_filter = options['meeting_key']
+        mode = options['mode']
+        
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
 
         if use_api_token_flag:
             try:
-                update_api_token_if_needed()
+                self.stdout.write(self.style.MIGRATE_HEADING("Verificando/Atualizando token da API (inicial)..."))
+                update_api_token_if_needed() # Chamada inicial do token
+                self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
             except Exception as e:
                 raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}. Não é possível prosseguir com a importação.")
         else:
             self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg). Buscando dados históricos."))
 
-        self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Resultados de Sessão (ORM)..."))
+        self.stdout.write(self.style.MIGRATE_HEADING(f"Iniciando importação de Resultados de Sessão no modo '{mode}'..."))
 
-        sr_inserted_db = 0
-        sr_skipped_db = 0
-        total_race_session_driver_triplets_eligible = 0 
-        sessions_api_calls_processed_count = 0 
+        total_sessions_processed = 0
+        total_records_inserted = 0
+        total_records_updated = 0
+        total_records_skipped_mode_I = 0 # Contagem para modo 'I'
 
-        try:
-            total_race_session_driver_triplets_eligible = 0 
+        # Identifica todas as triplas (M,S,D) relevantes (Race sessions, filtradas se meeting_key for dado)
+        all_relevant_triplets = self.get_session_driver_triplets_to_process(meeting_key_filter)
+        
+        if not all_relevant_triplets:
+            self.stdout.write(self.style.NOTICE("Nenhuma tripla de sessão/driver elegível encontrada para processamento. Encerrando."))
+            return
+
+        # Agrupa as triplas por session_key para fazer chamadas de API eficientes
+        session_triplets_map = {} # {session_key: [(m_key, s_key, d_num), ...]}
+        for m_key, s_key, d_num in all_relevant_triplets:
+            session_triplets_map.setdefault(s_key, []).append((m_key, s_key, d_num)) 
+        
+        unique_session_keys_sorted = sorted(list(session_triplets_map.keys()))
+
+        api_delay = self.API_DELAY_SECONDS 
+        
+        # Saída concisa por sessão
+        self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo por Sessão ---"))
+
+        for i, session_key in enumerate(unique_session_keys_sorted):
+            session_inserted_count = 0
+            session_updated_count = 0
+            session_skipped_count = 0 # Para modo 'I'
+
+            total_sessions_processed += 1
             
-            all_driver_triplets = set(
-                Drivers.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
-            )
+            if use_api_token_flag:
+                try:
+                    # Revalida o token antes de CADA chamada API, se necessário
+                    update_api_token_if_needed() 
+                except Exception as e:
+                    self.add_warning(f"Falha ao verificar/atualizar token antes da Sessão {session_key}: {e}. Pulando esta sessão.")
+                    continue 
 
-            race_sessions_pairs = set(
-                Sessions.objects.filter(session_type='Race').values_list('meeting_key', 'session_key')
-            )
-
-            relevant_driver_triplets = set(
-                (m, s, d) for m, s, d in all_driver_triplets if (m, s) in race_sessions_pairs
-            )
+            sr_data_from_api = self.fetch_session_results_data(session_key=session_key, use_token=use_api_token_flag) # <-- CORRIGIDO AQUI
             
-            existing_sr_triplets = set(
-                SessionResult.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
-            )
-            triplets_to_process = sorted(list(relevant_driver_triplets - existing_sr_triplets))
+            if isinstance(sr_data_from_api, dict) and "error_status" in sr_data_from_api:
+                self.add_warning(f"Erro API para Sessão {session_key}: {sr_data_from_api['error_message']}. Pulando.")
+                continue
 
-            total_race_session_driver_triplets_eligible = len(triplets_to_process)
+            if not sr_data_from_api:
+                self.add_warning(f"Aviso: API vazia para Sessão {session_key}.")
+                continue
             
-            if not triplets_to_process:
-                self.stdout.write(self.style.NOTICE("Nenhuma tripla (M,S,D) de sessões 'Race' encontrada para importar resultados de sessão. Encerrando."))
-                return
-
-            self.stdout.write(self.style.SUCCESS(f"Total de {total_race_session_driver_triplets_eligible} triplas (M,S,D) de drivers de sessões 'Race' para processamento."))
+            # --- Lógica de Inserção/Atualização (Modo 'I' vs 'U') ---
             
-            api_delay = self.API_DELAY_SECONDS 
-
-            session_pairs_to_fetch_api = {}
-            for m_key, s_key, d_num in triplets_to_process:
-                session_pairs_to_fetch_api.setdefault(s_key, []).append(d_num) 
+            # Coleta os IDs completos (meeting_key, session_key, driver_number) dos registros existentes para esta sessão
+            # E cria um mapa de (m,s,d) -> objeto SessionResult existente
+            # REMOVIDO .iterator() AQUI PARA EVITAR ERRO DE 'id'
+            existing_records_in_db_map = {
+                (sr.meeting_key, sr.session_key, sr.driver_number): sr
+                for sr in SessionResult.objects.filter(session_key=session_key)
+            }
             
-            unique_session_keys_to_fetch = sorted(list(session_pairs_to_fetch_api.keys()))
-
-            for i, session_key in enumerate(unique_session_keys_to_fetch): # Loop apenas por session_key
-                # --- PRÉ-SUMÁRIO POR SESSÃO ---
-                session_start_time = time.time()
-                current_session_inserted_db = 0
-                current_session_skipped_db = 0
-                current_session_warnings = 0
-                # ------------------------------
-
-                self.stdout.write(f"Processando Sessão (Sess {session_key}) para resultados ({i+1}/{len(unique_session_keys_to_fetch)})...")
-                sessions_api_calls_processed_count += 1
-                current_session_results_objects = []
+            instances_to_create = []
+            instances_to_update_list = [] # Lista de objetos para atualização individual
+            
+            for sr_entry_dict in sr_data_from_api:
+                m_key_api = sr_entry_dict.get('meeting_key')
+                s_key_api = sr_entry_dict.get('session_key')
+                d_num_api = sr_entry_dict.get('driver_number')
                 
-                try: 
-                    sr_data_from_api = self.fetch_session_results_data(session_key=session_key, use_token=use_api_token_flag)
-                    
-                    if isinstance(sr_data_from_api, dict) and "error_status" in sr_data_from_api:
-                        self.stdout.write(self.style.ERROR(f"  Erro na API para Sess {session_key}: {sr_data_from_api['error_message']}. Pulando esta sessão."))
-                        self.add_warning(f"Erro API Sess {session_key}: {sr_data_from_api['error_message']}") # Adiciona ao detalhe
+                # Validação para garantir que a tripla é relevante e completa
+                current_triple = (m_key_api, s_key_api, d_num_api)
+                if current_triple not in all_relevant_triplets: # Garante que só processamos triplas de Race sessions etc.
+                    self.add_warning(f"Registro da API {current_triple} não relevante (não Race ou fora do filtro meeting_key). Pulando.")
+                    continue
+
+                try:
+                    sr_instance_from_api = self.build_session_result_instance(sr_entry_dict)
+                    if sr_instance_from_api is None: # build_session_result_instance retorna None para dados incompletos da PK
                         continue 
 
-                    if not sr_data_from_api:
-                        self.stdout.write(self.style.WARNING(f"  Aviso: Nenhuma entrada de resultados encontrada na API para Sess {session_key}."))
-                        self.add_warning(f"Aviso: API vazia para Sess {session_key}.")
-                        continue
-                    
-                    self.stdout.write(f"  Encontrados {len(sr_data_from_api)} registros para Sess {session_key}. Filtrando por driver e construindo...")
+                    if current_triple in existing_records_in_db_map:
+                        if mode == 'U':
+                            # Atualizar registro existente: Pegue o objeto existente do DB e atualize seus campos
+                            existing_sr_obj = existing_records_in_db_map[current_triple]
+                            
+                            # Atualiza os campos do objeto existente com os dados da API
+                            existing_sr_obj.position = sr_instance_from_api.position
+                            existing_sr_obj.number_of_laps = sr_instance_from_api.number_of_laps
+                            existing_sr_obj.dnf = sr_instance_from_api.dnf
+                            existing_sr_obj.dns = sr_instance_from_api.dns
+                            existing_sr_obj.dsq = sr_instance_from_api.dsq
+                            existing_sr_obj.duration = sr_instance_from_api.duration
+                            existing_sr_obj.gap_to_leader = sr_instance_from_api.gap_to_leader
+                            
+                            instances_to_update_list.append(existing_sr_obj)
+                            
+                        else: # mode == 'I', então pula existentes
+                            session_skipped_count += 1
+                    else:
+                        instances_to_create.append(sr_instance_from_api)
 
-                    relevant_drivers_for_current_session_set = session_pairs_to_fetch_api.get(session_key, set()) 
-                    
-                    for sr_entry_dict in sr_data_from_api:
-                        driver_num_from_api = sr_entry_dict.get('driver_number')
-                        if driver_num_from_api in relevant_drivers_for_current_session_set: # Filtra drivers aqui
+                except Exception as build_e:
+                    self.add_warning(f"Erro ao preparar SR (Sess {s_key_api}, Driver {d_num_api}): {build_e}. Pulando registro.")
+            
+            # --- Inserção/Atualização no DB para a Sessão Atual ---
+            try:
+                with transaction.atomic():
+                    # Inserir novos registros
+                    if instances_to_create:
+                        created_records = SessionResult.objects.bulk_create(instances_to_create, batch_size=self.BULK_SIZE, ignore_conflicts=True)
+                        session_inserted_count += len(created_records)
+                        # Se houver conflitos no modo 'I', eles são ignorados, então apenas contamos os criados
+                        if mode == 'I':
+                            session_skipped_count += (len(instances_to_create) - len(created_records))
+                            
+                    # Atualizar registros existentes (iterativo devido ao problema do 'id' com PK composta e managed=False)
+                    if instances_to_update_list:
+                        for obj_to_update in instances_to_update_list:
                             try:
-                                sr_instance = self.build_session_result_instance(sr_entry_dict)
-                                if sr_instance is not None:
-                                    current_session_results_objects.append(sr_instance)
-                            except Exception as build_e:
-                                self.stdout.write(self.style.ERROR(f"Erro ao construir instância de resultado de sessão (Sess {session_key}, Driver {driver_num_from_api}): {build_e}. Pulando este registro."))
-                                self.add_warning(f"Erro construir SR (Sess {session_key}, Driver {driver_num_from_api}): {build_e}")
-                            
-                        if current_session_results_objects:
-                            with transaction.atomic(): # Transação atômica para TODO o lote desta SESSÃO
-                                created_instances = SessionResult.objects.bulk_create(current_session_results_objects, batch_size=self.BULK_SIZE, ignore_conflicts=True)
-                                sr_inserted_db += len(created_instances)
-                                sr_skipped_db += (len(current_session_results_objects) - len(created_instances))
-                                current_session_inserted_db += len(created_instances)
-                                current_session_skipped_db += (len(current_session_results_objects) - len(created_instances))
-#                                self.stdout.write(self.style.SUCCESS(f"  {len(created_instances)} registros inseridos (total para esta sessão)."))
-                            
-                        else:
-                            self.add_warning(f"Aviso: Nenhuma entrada de resultado de sessão válida encontrada para inserção para Sess {session_key} (após filtragem de driver).")
-                            
-                        if api_delay > 0:
-                            time.sleep(api_delay)
+                                # Filtra pela chave primária composta e atualiza os campos
+                                SessionResult.objects.filter(
+                                    meeting_key=obj_to_update.meeting_key,
+                                    session_key=obj_to_update.session_key,
+                                    driver_number=obj_to_update.driver_number
+                                ).update(
+                                    position=obj_to_update.position,
+                                    number_of_laps=obj_to_update.number_of_laps,
+                                    dnf=obj_to_update.dnf,
+                                    dns=obj_to_update.dns,
+                                    dsq=obj_to_update.dsq,
+                                    duration=obj_to_update.duration,
+                                    gap_to_leader=obj_to_update.gap_to_leader
+                                )
+                                session_updated_count += 1
+                            except Exception as update_e:
+                                self.add_warning(f"Erro ao ATUALIZAR SR {obj_to_update.meeting_key}-{obj_to_update.session_key}-{obj_to_update.driver_number}: {update_e}. Registro pode não ter sido atualizado.")
+                                
 
-                except Exception as session_overall_e: 
-                    self.stdout.write(self.style.ERROR(f"Erro ao processar Sessão (Sess {session_key}): {session_overall_e}. Esta sessão não foi processada por completo. Pulando para a próxima sessão."))
-                    self.add_warning(f"Erro geral SR (Sess {session_key}): {session_overall_e}")
-                finally:
-                    # --- PRÉ-SUMÁRIO POR SESSÃO ---
-                    session_end_time = time.time()
-                    session_duration = session_end_time - session_start_time
-                    self.stdout.write(self.style.MIGRATE_HEADING(f"  Resumo da Sessão {session_key}:"))
-                    self.stdout.write(self.style.SUCCESS(f"    Inseridos: {current_session_inserted_db}"))
-                    self.stdout.write(self.style.NOTICE(f"    Ignorados (existiam): {current_session_skipped_db}"))
-                    self.stdout.write(self.style.WARNING(f"    Avisos específicos da sessão: {self.warnings_count - (total_race_session_driver_triplets_eligible - total_race_session_driver_triplets_eligible)}")) # Ajuste para warnings específicos da sessão
-                    self.stdout.write(self.style.NOTICE(f"    Duração: {session_duration:.2f} segundos."))
-                    # A variável meeting_key não é acessível diretamente aqui.
-                    # Para mostrar Mtg key, teria que passar para o finally ou definir no loop.
-                    # self.stdout.write(self.style.NOTICE(f"    Meeting: {meeting_key}")) 
-                    # -----------------------------
+            except IntegrityError as e:
+                self.add_warning(f"Erro de integridade no DB para Sessão {session_key}: {e}. Registros podem ter sido pulados.")
+            except Exception as e:
+                self.add_warning(f"Erro DB ao processar Sessão {session_key}: {e}. Pulando sessão.")
+            
+            # Atualiza contadores totais
+            total_records_inserted += session_inserted_count
+            total_records_updated += session_updated_count
+            total_records_skipped_mode_I += session_skipped_count
+
+            # --- Saída de Resultados por Sessão (Formato Específico) ---
+            self.stdout.write(f"session_key: {session_key}")
+            self.stdout.write(f"Insert: {session_inserted_count}")
+            self.stdout.write(f"update: {session_updated_count}")
+            # Se você quiser o "skipped" no output por sessão no modo 'I', adicione aqui:
+            # if mode == 'I':
+            #     self.stdout.write(f"skipped: {session_skipped_count}")
+
+            if api_delay > 0:
+                time.sleep(api_delay) # Pequeno delay entre chamadas API
                 
-            self.stdout.write(self.style.SUCCESS("Importação de Resultados de Sessão concluída com sucesso para todas as sessões e drivers elegíveis!"))
-
-        except OperationalError as e:
-            raise CommandError(f"Erro operacional de banco de dados durante a importação (ORM): {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado durante a importação de Resultados de Sessão (ORM): {e}")
-        finally:
-            self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo da Importação de Resultados de Sessão (ORM) ---"))
-            self.stdout.write(self.style.SUCCESS(f"Triplas (meeting_key, session_key, driver_number) de drivers de Race elegíveis: {total_race_session_driver_triplets_eligible}")) 
-            self.stdout.write(self.style.SUCCESS(f"Sessões (meeting_key, session_key) com API processada: {sessions_api_calls_processed_count}")) 
-            self.stdout.write(self.style.SUCCESS(f"Registros inseridos no DB: {sr_inserted_db}"))
-            self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB): {sr_skipped_db}"))
-            self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
-            if self.all_warnings_details: # Se houver detalhes de avisos para mostrar
-                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
-                for warn_msg in self.all_warnings_details:
-                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
-            self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
-            self.stdout.write(self.style.SUCCESS("Importação de resultados de sessão finalizada!"))
+        # --- Resumo Final ---
+        self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo Final da Importação ---"))
+        self.stdout.write(self.style.SUCCESS(f"Sessões Processadas: {total_sessions_processed}"))
+        self.stdout.write(self.style.SUCCESS(f"Registros Inseridos Total: {total_records_inserted}"))
+        self.stdout.write(self.style.SUCCESS(f"Registros Atualizados Total: {total_records_updated}"))
+        if mode == 'I':
+            self.stdout.write(self.style.NOTICE(f"Registros Ignorados (já existiam no modo 'I'): {total_records_skipped_mode_I}"))
+        self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas: {self.warnings_count}"))
+        if self.all_warnings_details:
+            self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+            for warn_msg in self.all_warnings_details:
+                self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
+        self.stdout.write(self.style.MIGRATE_HEADING("-----------------------------------"))
+        self.stdout.write(self.style.SUCCESS("Importação de resultados de sessão finalizada!"))

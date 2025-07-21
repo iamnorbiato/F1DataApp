@@ -112,11 +112,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'America/Sao_Paulo' 
-
 USE_I18N = True
-
 USE_TZ = True
 
 
@@ -140,15 +137,10 @@ REST_FRAMEWORK = {
     )
 }
 
-# Configurações de CORS (para desenvolvimento e acesso em rede local/externa)
-# ATENÇÃO: CORS_ALLOW_ALL_ORIGINS = True NÃO É SEGURO PARA PRODUÇÃO.
-# Em produção, você DEVE listar apenas as origens permitidas em CORS_ALLOWED_ORIGINS.
-CORS_ALLOW_ALL_ORIGINS = True # <--- ADICIONE/AJUSTE ESTA LINHA PARA 'True'
-# CORS_ALLOWED_ORIGINS = [ # <--- MANTENHA ESTA LINHA COMENTADA SE USAR CORS_ALLOW_ALL_ORIGINS = True
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-#     # Você adicionaria IPs específicos aqui se CORS_ALLOW_ALL_ORIGINS fosse False em dev/prod
-#     # Ex: "http://192.168.0.X:3000", # IP do seu Mac/outro PC na rede local
-#     # Ex: "http://SEU_IP_PUBLICO:30080", # Para acesso externo
-#     # Ex: "http://MEU_DOMINIO.COM", # Para domínio real
-# ]
+#CORS_ALLOW_ALL_ORIGINS = True # <--- ADICIONE/AJUSTE ESTA LINHA PARA 'True'
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://home:30080",
+    "http://192.168.0.53:30080",
+    "http://norbiato.ddns.net:7000",
+]

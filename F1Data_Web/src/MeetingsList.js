@@ -1,12 +1,12 @@
 /* G:\Learning\F1Data\F1Data_Web\src\MeetingsList.js V22 */
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from './api'; // ajuste o caminho se necessário
+console.log('API_BASE_URL:', API_BASE_URL);
 
 function MeetingsList({ selectedYear, onMeetingSelect, selectedMeetingKey }) {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:30008';
 
   useEffect(() => {
     const fetchMeetings = async () => {

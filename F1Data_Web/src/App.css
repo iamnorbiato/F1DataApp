@@ -427,6 +427,7 @@ a.header-nav-item:hover {
   /*max-width: 1200px; /* Mantém um limite superior */
   padding-left: 0px; /* Exemplo: um padding de 20px na esquerda */
   padding-right: 20px; /* Para simetria ou se houver algo na direita */
+  margin-top: 0;
 }
 
 /* Painel lateral que contém o título, botão e o componente Sessions */
@@ -542,7 +543,7 @@ a.header-nav-item:hover {
   overflow: hidden; /* Garante que ele não "transborde" */
   grid-column: 2 / 3;
   grid-row: 1 / 3;
-
+  margin-top: 0;
 }
 
 .circuit-map-panel h2 {
@@ -556,6 +557,86 @@ a.header-nav-item:hover {
   font-family: 'Formula1 Display Bold', sans-serif;
   width: 100%;
   box-sizing: border-box;
+  align-items: flex-start;
+}
+
+.circuit-map-content {
+  flex-grow: 1; /* Faz com que esta div ocupe todo o espaço vertical restante */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centraliza o SVG horizontalmente dentro desta div */
+  justify-content: center; /* Centraliza o SVG verticalmente dentro desta div */
+  overflow: hidden; /* Garante que o SVG não transborde */
+  width: 100%; /* Ocupa a largura total disponível */
+  height: 100%; /* Ocupa a altura total disponível */
+  padding: 0 10px 10px 10px; /* Adiciona padding inferior e lateral ao conteúdo do mapa */
+}
+
+.circuit-map-content .circuit-svg {
+  max-width: 100%; /* Garante que o SVG não seja maior que seu contêiner */
+  max-height: 100%; /* Garante que o SVG não seja maior que seu contêiner */
+  display: block; /* Remove espaço extra abaixo do SVG */
+}
+
+.session-results-table-header span {
+    white-space: nowrap; 
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-results-table-header {
+  display: grid;
+  /* grid-template-columns: 35px 2fr 60px 130px 1fr 60px; /* PADRÃO PARA PRACTICE/RACE */
+  gap: 8px; /* O mesmo gap das linhas de dados */
+  
+  background-color: var(--secondary-dark-bg);
+  color: var(--text-medium);
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.7em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky; 
+  top: 0; 
+  z-index: 1; 
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+}
+
+/* Define o GRID TEMPLATE para o CABEÇALHO de Practice/Race */
+.session-results-table-header:has(.header-laps) { /* Se tiver header-laps, é Practice/Race */
+  grid-template-columns: 35px 2fr 60px 130px 1fr 60px; /* 6 COLUNAS */
+}
+
+/* NOVO: Define o GRID TEMPLATE para o CABEÇALHO de Qualifying */
+.session-results-table-header:has(.header-q1) { /* Se tiver header-q1 (ou Q2/Q3), é Qualifying */
+  grid-template-columns: 35px 2fr 70px 70px 70px 70px 70px; /* 7 COLUNAS: Pos | Driver | Q3 | Pos Q2 | Q2 | Pos Q1 | Q1 */
+  /* Ajuste os 70px conforme a necessidade para cada Q-time/Pos */
+}
+
+/* Estilos para os spans dentro do cabeçalho */
+.session-results-table-header span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Alinhamento dos textos no cabeçalho */
+.session-results-table-header .header-pos { text-align: right; }
+.session-results-table-header .header-pilot { text-align: left; }
+.session-results-table-header .header-laps { text-align: right; }
+.session-results-table-header .header-best { text-align: right; }
+.session-results-table-header .header-gap { text-align: right; }
+.session-results-table-header .header-status { text-align: center; }
+.session-results-table-header .header-duration-race { text-align: right; } 
+
+/* NOVOS: Alinhamento para cabeçalhos de Qualifying */
+.session-results-table-header .header-q3,
+.session-results-table-header .header-q2,
+.session-results-table-header .header-q1 {
+    text-align: right; /* Alinha tempos de Q à direita */
+}
+.session-results-table-header .header-pos-q2,
+.session-results-table-header .header-pos-q1 {
+    text-align: right; /* Alinha posições Q à direita */
 }
 
 .session-results-panel {
@@ -592,34 +673,122 @@ a.header-nav-item:hover {
   margin: 0;
 }
 
+/* --- ESTILOS PARA CADA LINHA DE RESULTADO (CONDICIONAL) --- */
 .session-results-item {
   background-color: var(--button-bg); 
   border-radius: 5px;
-  padding: 8px 10px;
-  margin-bottom: 8px; 
+  padding: 8px 10px; 
+  margin-bottom: 8px;
   color: var(--text-light);
   font-family: 'Formula1 Display Regular', sans-serif;
   font-size: 0.8em; 
-  cursor: pointer; 
+  cursor: pointer;
   transition: background-color 0.2s ease;
-  display: flex; 
-  justify-content: space-between; 
+  
+  display: grid;
+  /* PADRÃO: Grid para Practice/Race (6 colunas) */
+  grid-template-columns: 35px 2fr 60px 130px 1fr 60px; 
+  gap: 8px; /* O mesmo gap das colunas do cabeçalho */
+
   align-items: center;
   text-decoration: none;
 }
 
+/* NOVO: Sobrescreve grid-template-columns para itens de Qualifying */
+.session-results-item.qualifying-layout {
+  grid-template-columns: 35px 2fr 70px 70px 70px 70px 70px; /* 7 COLUNAS: Pos | Driver | Q3 | Pos Q2 | Q2 | Pos Q1 | Q1 */
+  /* Ajuste os 70px conforme a necessidade para cada Q-time/Pos */
+}
 
 .session-results-item:hover {
   background-color: var(--button-hover);
 }
 
 .session-results-item .position {
-  font-weight: bold;
-  color: var(--accent-green);
+  text-align: right; 
+  color: var(--text-light); 
+  font-weight: bold; 
 }
 
+.session-results-item .position.position-status-like {
+  text-align: center; 
+  font-weight: bold;
+  color: var(--accent-green);
+  background-color: rgba(255, 0, 0, 0.3); 
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* NOVO ESTILO: Para posições como "DQ", "NC" */
+.session-results-item .position.position-status-like {
+  text-align: center; /* Centraliza o texto */
+  font-weight: bold;
+  color: var(--accent-green); /* Usa a cor de destaque (verde) */
+  background-color: rgba(255, 0, 0, 0.3); /* Fundo similar ao status-flag */
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+
 .session-results-item .pilot {
-  color: var(--text-light);
+  text-align: left; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
+
+.session-results-item .number-of-laps {
+  text-align: right; 
+  white-space: nowrap;
+}
+
+/* Renomeado: Agora .duration abrange "Best:" e o valor */
+.session-results-item .duration { 
+  text-align: right; 
+  white-space: nowrap;
+}
+
+.session-results-item .gap {
+  text-align: right; 
+  white-space: nowrap;
+}
+
+.session-results-item .status-flags-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* Certifique-se que o padding aqui não distorce a coluna */
+    padding: 0 2px; /* Pequeno padding para centralizar bem */
+}
+
+.session-results-item .status-flag { 
+  text-align: center; 
+  font-weight: bold;
+  color: var(--accent-green);
+  background-color: rgba(255, 0, 0, 0.3); 
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin: 0; /* Remove margem para evitar empurrar */
+}
+
+* NOVOS ESTILOS PARA COLUNAS DE QUALIFYING */
+.session-results-item .q-time { /* Para Q1, Q2, Q3 tempos */
+    text-align: right;
+    white-space: nowrap;
+}
+.session-results-item .pos-q1,
+.session-results-item .pos-q2 { /* Para Pos Q1, Pos Q2 */
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Estilo para "DNQ" (pode ser usado em q-time) */
+.session-results-item .q-time:contains("DNQ") {
+    color: var(--text-medium); /* Cor mais suave para DNQ */
+    font-weight: normal;
 }
 
 .left-panel-group {

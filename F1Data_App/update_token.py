@@ -21,11 +21,6 @@ def get_env_variable(key):
     return value
 
 def is_token_expired(expiration_timestamp_str):
-    """
-    Verifica se o token expirou.
-    expiration_timestamp_str: Timestamp Unix em segundos (string).
-    Retorna True se expirado ou se o timestamp for inválido/ausente, False caso contrário.
-    """
     if not expiration_timestamp_str:
         print("AVISO: OPENF1_TOKEN_EXPIRATION está vazio. Token considerado expirado.")
         return True
@@ -39,7 +34,7 @@ def is_token_expired(expiration_timestamp_str):
             print(f"ALERTA: Token expirado ou próximo de expirar. Expira em: {datetime.fromtimestamp(expiration_timestamp, timezone.utc)} UTC. Agora: {datetime.fromtimestamp(current_timestamp, timezone.utc)} UTC.")
             return True
         else:
-            print(f"INFO: Token ainda válido. Expira em: {datetime.fromtimestamp(expiration_timestamp, timezone.utc)} UTC. Agora: {datetime.fromtimestamp(current_timestamp, timezone.utc)} UTC.")
+#            print(f"INFO: Token ainda válido. Expira em: {datetime.fromtimestamp(expiration_timestamp, timezone.utc)} UTC. Agora: {datetime.fromtimestamp(current_timestamp, timezone.utc)} UTC.")
             return False
     except ValueError:
         print(f"ERRO: OPENF1_TOKEN_EXPIRATION '{expiration_timestamp_str}' não é um número válido. Token considerado expirado.", file=sys.stderr)

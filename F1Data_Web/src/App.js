@@ -6,6 +6,8 @@ import MeetingsList from './MeetingsList';
 import Sessions from './Sessions';
 import CircuitMapPanel from './CircuitMapPanel';
 import SessionResultsPanel from './SessionResultsPanel';
+import { API_BASE_URL } from './api'; // ajuste o caminho se necessário
+console.log('API_BASE_URL:', API_BASE_URL);
 
 function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -18,7 +20,6 @@ function App() {
   const [selectedSessionKey, setSelectedSessionKey] = useState(null);
   const [circuitRef, setCircuitRef] = useState(null); // Este será o circuitref REAL do SVG
 
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:30080';
 
   const handleHamburgerClick = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -132,6 +133,7 @@ function App() {
           <a href="/pilotos" className="header-nav-item">Pilotos</a>
           <a href="/circuitos" className="header-nav-item">Circuitos</a>
           <a href="/telemetria" className="header-nav-item">Telemetria</a>
+          <a href="/livetimming" className="header-nav-item">LiveTimming</a>
         </nav>
         <button className="hamburger-menu-button" onClick={handleHamburgerClick}>&#9776;</button>
       </header>
@@ -158,19 +160,15 @@ function App() {
             </div>
 
             {selectedSessionKey && circuitRef && (
-              <div className="circuit-map-panel">
                 <CircuitMapPanel
                   circuitref={circuitRef}
                   selectedSessionKey={selectedSessionKey}
                   circuitShortName={selectedCircuitShortName}
                 />
-              </div>
             )}
 
             {selectedSessionKey && (
-              <div className="session-results-panel">
                 <SessionResultsPanel sessionKey={selectedSessionKey} />
-              </div>
             )}
           </div>
       )}

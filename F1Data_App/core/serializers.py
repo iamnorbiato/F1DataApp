@@ -70,11 +70,37 @@ class WeatherSerializer(serializers.ModelSerializer):
         fields = ['session_key', 'meeting_key', 'session_date', 'wind_direction', 'air_temperature', 'humidity', 'pressure', 'rainfall', 'wind_speed', 'track_temperature',]
         
 # Serializer para SessionResult
-class SessionResultSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SessionResult
-        fields = ['position','driver_number','time_gap','number_of_laps','meeting_key','session_key'] 
-        
+class SessionResultSerializer(serializers.Serializer):
+    # Campos da Sessão e Posição
+    session_type = serializers.CharField()
+    position = serializers.CharField(allow_null=True, required=False)
+    calculated_position = serializers.IntegerField()
+    driver_number = serializers.IntegerField()
+    number_of_laps = serializers.IntegerField(allow_null=True, required=False)
+    # Campos Booleanos de Status da Corrida
+    dnf = serializers.BooleanField()
+    dns = serializers.BooleanField()
+    dsq = serializers.BooleanField()
+    # Campos ArrayField
+    duration = serializers.ListField(
+        child=serializers.DecimalField(max_digits=8, decimal_places=3, allow_null=True),
+        allow_empty=True, allow_null=True, required=False
+    )
+    gap_to_leader = serializers.ListField(
+        child=serializers.CharField(allow_null=True),
+        allow_empty=True, allow_null=True, required=False
+    )
+    # Campos do Driver
+    broadcast_name = serializers.CharField()
+    team_name = serializers.CharField()
+    headshot_url = serializers.CharField(allow_null=True, required=False)
+    # Chaves de Identificação
+    meeting_key = serializers.IntegerField()
+    session_key = serializers.IntegerField()
+    # NOVOS CAMPOS PARA QUALIFICAÇÃO
+    pos_q1 = serializers.IntegerField(allow_null=True, required=False) # <-- NOVO CAMPO
+    pos_q2 = serializers.IntegerField(allow_null=True, required=False) # <-- NOVO CAMPO
+            
 # Serializer para Laps
 class LapsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -106,13 +132,13 @@ class IntervalsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Intervals
         fields = ['session_key', 'driver_number', 'date', 'gap_to_leader', 'interval']
-        
+
 # Serializer para RaceControl
 class RaceControlSerializer(serializers.ModelSerializer):
     class Meta:
         model = RaceControl
         fields = ['session_key', 'session_date', 'driver_number', 'lap_number', 'category', 'flag', 'scope', 'sector', 'message']
-        
+                
 #Serializer para TeamRadio
 class TeamRadioSerializer(serializers.ModelSerializer):
     class Meta:

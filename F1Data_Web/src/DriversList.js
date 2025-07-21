@@ -1,13 +1,13 @@
 // G:\Learning\F1Data\F1Data_Web\src\DriversList.js
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from './api'; // ajuste o caminho se necessário
+console.log('API_BASE_URL:', API_BASE_URL);
 
 // MODIFICADO: Agora recebe a prop onDriverSelect (callback do pai)
 function DriversList({ sessionKey, onDriverSelect }) {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://home:300080';
 
   useEffect(() => {
     const fetchDrivers = async () => {
