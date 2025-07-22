@@ -192,7 +192,7 @@ a.header-nav-item:hover {
 .meetings-list-container {
   width: 100%;
   min-width: 350px; /* Mantenha a largura máxima desejada para este contêiner */
-  max-width: 400px; /* Mantenha a largura máxima desejada para este contêiner */
+  max-width: 350px; /* Mantenha a largura máxima desejada para este contêiner */
   /*flex-grow: 1; */ 
   background-color: var(--secondary-dark-bg);
   border-radius: 12px;
@@ -541,7 +541,9 @@ a.header-nav-item:hover {
   color: var(--text-light);
   min-width: 300px; /* Largura mínima para o painel do mapa, ajuste conforme necessário */
   flex-shrink: 0; /* Impede que ele encolha */
-  width: 740px; /* Largura máxima para o painel do mapa, ajuste conforme necessário */
+  /*width: 740px; /* Largura máxima para o painel do mapa, ajuste conforme necessário */
+  height: 100%;   /* Este */
+  max-height: 100%; /* Este */
   flex-grow: 1;
   height: 100%;
   max-height: 100%; /* Limita o painel, evita SVG estourar tudo */
@@ -814,7 +816,8 @@ a.header-nav-item:hover {
 
 .main-grid-layout {
   display: grid;
-  grid-template-columns: 2fr 3fr; /* Mantém 2 colunas */
+  /*grid-template-columns: 2fr 3fr; /* Mantém 2 colunas */
+  grid-template-columns: auto 1fr; /* Coluna 1 (Meetings/Sessions/Drivers) | Coluna 2 (Mapa/Resultados/TrackMap) */
   grid-template-rows: auto auto auto; /* Garante 3 linhas para RaceControl */
   gap: 5px;
   width: 100%;
@@ -837,9 +840,13 @@ a.header-nav-item:hover {
 
 
 .left-panel-group-horizontal {
-  display: flex;
+  display: flex; /* Garante que os itens dentro dele (MeetingsList, Sessions, DriversList) fiquem lado a lado */
   flex-direction: row;
   gap: 5px;
+  flex-wrap: nowrap; /* Impede que quebre linha prematuramente se houver espaço */
+  width: 100%; /* Ocupa a largura total da coluna do grid */
+  grid-column: 1 / 2; /* Mantém na primeira coluna do main-grid-layout */
+  grid-row: 1 / 2;
 }
 
 .session-results-panel::-webkit-scrollbar {
@@ -1013,3 +1020,142 @@ a.header-nav-item:hover {
     border: 2px solid var(--secondary-dark-bg);
 }
 
+/* --- Estilos para o componente DriversList (baseado em SessionResultsPanel) --- */
+.drivers-list-panel {
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 10px;
+  color: var(--text-light);
+  min-width: 300px;
+  width: 700px; /* Garante que ocupe toda a largura disponível */
+  flex-grow: 1; /* Permite que ocupe o espaço disponível na horizontal */
+  flex-shrink: 0; /* Impede que ele encolha menos que seu min-width */
+  height: auto;
+  min-height: 220px;
+  max-height: 40vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.drivers-list-panel h2 {
+  text-align: center;
+  color: var(--accent-green);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+/* Estilos para o cabeçalho da tabela de Drivers (fixo) */
+.drivers-table-header {
+  display: grid;
+  /* Define 3 colunas para Driver: Número | Piloto | Equipe */
+  grid-template-columns: 40px 2fr 1.5fr;
+  gap: 8px; /* Espaçamento entre as colunas */
+  
+  background-color: var(--secondary-dark-bg);
+  color: var(--text-medium);
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.7em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky; /* Fixa o cabeçalho no topo da área de rolagem */
+  top: 0;
+  z-index: 1; /* Garante que fique acima dos itens da lista */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Alinhamento dos textos no cabeçalho dos drivers */
+.drivers-table-header span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drivers-table-header .header-driver-num { text-align: right; }
+.drivers-table-header .header-driver-pilot { text-align: left; }
+.drivers-table-header .header-driver-team { text-align: left; }
+
+/* Container para a lista de drivers (para scroll individual) */
+.drivers-list-content {
+  flex-grow: 1; /* Faz com que esta div ocupe todo o espaço vertical disponível */
+  overflow-y: auto; /* AQUI é onde o scroll vertical acontecerá */
+  overflow-x: hidden; /* Evita scroll horizontal */
+  scrollbar-width: thin; /* Para Firefox */
+  scrollbar-color: var(--accent-green) var(--secondary-dark-bg); /* Para Firefox */
+}
+
+/* Estilo da lista UL dentro de drivers-list-content */
+.drivers-list-content .drivers-list-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Estilo para cada item/linha de Driver */
+.driver-list-item {
+  display: grid;
+  /* MESMO GRID-TEMPLATE-COLUMNS DO CABEÇALHO PARA ALINHAMENTO */
+  grid-template-columns: 40px 2fr 1.5fr; 
+  gap: 8px; /* O mesmo gap do cabeçalho */
+  
+  background-color: var(--button-bg); /* Cor de fundo da linha de dados */
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  color: var(--text-light);
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 0.8em; /* Tamanho da fonte dos dados */
+  align-items: center; /* Alinhamento vertical dos itens na linha */
+  transition: background-color 0.2s ease;
+  cursor: pointer; /* Indica que é clicável */
+}
+
+.driver-list-item:last-child {
+  margin-bottom: 0;
+}
+
+.driver-list-item:hover {
+  background-color: var(--button-hover);
+}
+
+/* Alinhamento dos textos nas colunas de dados do driver */
+.driver-list-item .driver-num { text-align: right; font-weight: bold; }
+.driver-list-item .driver-pilot { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.driver-list-item .driver-team { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Estilo para o item ativo (selecionado) */
+.driver-list-item.active {
+  background-color: var(--accent-green);
+  color: var(--primary-dark-bg);
+  font-weight: bold;
+}
+
+/* Estilos da barra de rolagem para o painel DriversList */
+.drivers-list-panel::-webkit-scrollbar {
+    width: 8px;
+}
+.drivers-list-panel::-webkit-scrollbar-track {
+    background: var(--secondary-dark-bg);
+    border-radius: 10px;
+}
+.drivers-list-panel::-webkit-scrollbar-thumb {
+    background-color: var(--accent-green);
+    border-radius: 10px;
+    border: 2px solid var(--secondary-dark-bg);
+}
+
+.drivers-list-content::-webkit-scrollbar {
+    width: 8px;
+}
+.drivers-list-content::-webkit-scrollbar-track {
+    background: var(--secondary-dark-bg);
+    border-radius: 10px;
+}
+.drivers-list-content::-webkit-scrollbar-thumb {
+    background-color: var(--accent-green);
+    border-radius: 10px;
+    border: 2px solid var(--secondary-dark-bg);
+}
