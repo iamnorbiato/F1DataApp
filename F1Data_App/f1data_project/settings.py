@@ -141,6 +141,8 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://home:30080",
+    "http://home:3000",
+    "http://192.168.0.53:30080",
     "http://192.168.0.53:30080",
     "http://norbiato.ddns.net:7000",
 ]

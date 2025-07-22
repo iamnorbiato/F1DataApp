@@ -84,7 +84,7 @@ class RaceControl(models.Model):
     message = models.TextField(blank=True, null=True)
 
     class Meta:
-        db_table = 'f1data.racecontrol'
+        db_table = 'racecontrol'
         managed = False
         unique_together = (
             ('meeting_key', 'session_key', 'driver_number', 'lap_number', 'category', 'flag', 'sector'),

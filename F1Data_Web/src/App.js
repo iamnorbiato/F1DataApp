@@ -6,6 +6,7 @@ import MeetingsList from './MeetingsList';
 import Sessions from './Sessions';
 import CircuitMapPanel from './CircuitMapPanel';
 import SessionResultsPanel from './SessionResultsPanel';
+import RaceControl from './RaceControl'; // Importando o novo componente RaceControl
 import { API_BASE_URL } from './api'; // ajuste o caminho se necessário
 console.log('API_BASE_URL:', API_BASE_URL);
 
@@ -19,7 +20,6 @@ function App() {
   const [selectedCircuitShortName, setSelectedCircuitShortName] = useState(null);
   const [selectedSessionKey, setSelectedSessionKey] = useState(null);
   const [circuitRef, setCircuitRef] = useState(null); // Este será o circuitref REAL do SVG
-
 
   const handleHamburgerClick = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -42,7 +42,7 @@ function App() {
         const data = await response.json();
         setAvailableYears(data.available_years || []);
       } catch (error) {
-        console.error("Geni: Erro ao carregar anos:", error);
+        console.error("Erro ao carregar anos:", error);
         setAvailableYears([]);
       }
     }
@@ -62,7 +62,6 @@ function App() {
 
   // MODIFICAÇÃO PRINCIPAL AQUI: handleMeetingSelect agora é async e faz a busca do circuitRef
   const handleMeetingSelect = async (meetingKey, meetingName, circuitShortName, circuitKeyForCircuit) => {
-    console.log("DEBUG: handleMeetingSelect chamada. Args:", { meetingKey, meetingName, circuitShortName, circuitKeyForCircuit }); // NOVO LOG 1
 
     setSelectedMeetingKey(meetingKey);
     setSelectedMeetingName(meetingName);
@@ -72,44 +71,41 @@ function App() {
 
     // FAÇA A CHAMADA DA API AQUI DENTRO!
     if (circuitKeyForCircuit) {
-        console.log(`DEBUG: circuitKeyForCircuit existe: ${circuitKeyForCircuit}. Iniciando busca de circuitRef...`); // NOVO LOG 2
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/circuit/?circuit_key=${circuitKeyForCircuit}`);
-            console.log("DEBUG: Resposta do fetch da API de Circuit:", response); // NOVO LOG 3
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/circuit/?circuit_key=${circuitKeyForCircuit}`);
 
-            if (!response.ok) {
-                console.error(`ERROR: Erro ao buscar circuit ref para circuit_key ${circuitKeyForCircuit}: ${response.status} ${response.statusText}`);
-                setCircuitRef(null);
-                return;
-            }
-            const data = await response.json();
-            console.log("DEBUG: Dados recebidos da API de Circuit:", data); // NOVO LOG 4
-
-            if (data && data.circuitref) {
-                const finalCircuitRef = data.circuitref.toLowerCase();
-                setCircuitRef(finalCircuitRef); // Definir o circuitRef real e em minúsculas
-                console.log(`DEBUG: circuitRef definido para: ${finalCircuitRef}`); // NOVO LOG 5
-            } else {
-                console.warn(`WARN: Circuit ref não encontrado na resposta para circuit_key: ${circuitKeyForCircuit}`, data);
-                setCircuitRef(null);
-            }
-        } catch (error) {
-            console.error("ERROR: Geni: Erro ao buscar o circuit ref da API:", error);
-            setCircuitRef(null);
+        if (!response.ok) {
+          console.error(`ERROR: Erro ao buscar circuit ref para circuit_key ${circuitKeyForCircuit}: ${response.status} ${response.statusText}`);
+          setCircuitRef(null);
+          return;
         }
+        const data = await response.json();
+
+        if (data && data.circuitref) {
+          const finalCircuitRef = data.circuitref.toLowerCase();
+          setCircuitRef(finalCircuitRef); // Definir o circuitRef real e em minúsculas
+        } else {
+          console.warn(`WARN: Circuit ref não encontrado na resposta para circuit_key: ${circuitKeyForCircuit}`, data);
+          setCircuitRef(null);
+        }
+      } catch (error) {
+        console.error("ERROR: Geni: Erro ao buscar o circuit ref da API:", error);
+        setCircuitRef(null);
+      }
     } else {
-        console.log("DEBUG: circuitKeyForCircuit é nulo/indefinido. Não buscando circuitRef."); // NOVO LOG 6
-        setCircuitRef(null); // Garante que circuitRef é null se não houver circuitKeyForCircuit
+      setCircuitRef(null); // Garante que circuitRef é null se não houver circuitKeyForCircuit
     }
 
     setShowYearDropdown(false);
     if (isMobileMenuOpen) setIsMobileMenuOpen(false);
   };
+
   const handleSessionSelect = (sessionKey, sessionName, dateStart) => {
     setSelectedSessionKey(sessionKey);
     // Aqui você também precisará buscar os dados meteorológicos para esta sessão (próxima etapa)
     console.log(`Sessão selecionada: ${sessionKey}, ${sessionName}, ${dateStart}`);
   };
+
   return (
     <div className="App">
       <header className="main-header">
@@ -160,18 +156,22 @@ function App() {
             </div>
 
             {selectedSessionKey && circuitRef && (
-                <CircuitMapPanel
-                  circuitref={circuitRef}
-                  selectedSessionKey={selectedSessionKey}
-                  circuitShortName={selectedCircuitShortName}
-                />
+              <CircuitMapPanel
+                circuitref={circuitRef}
+                selectedSessionKey={selectedSessionKey}
+                circuitShortName={selectedCircuitShortName}
+              />
             )}
 
             {selectedSessionKey && (
-                <SessionResultsPanel sessionKey={selectedSessionKey} />
+              <SessionResultsPanel sessionKey={selectedSessionKey} />
+            )}
+
+            {selectedSessionKey && (
+              <RaceControl sessionKey={selectedSessionKey} />
             )}
           </div>
-      )}
+        )}
       </main>
     </div>
   );

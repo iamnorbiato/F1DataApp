@@ -351,7 +351,12 @@ a.header-nav-item:hover {
     display: flex;
     flex-direction: column;
     padding: 20px;
+    position: relative; /* <-- CORREÇÃO AQUI: Torna este pai posicionado */
+    /* Garante que este contêiner tenha a altura necessária para o dropdown */
+    height: 100%; 
+    overflow-y: auto; /* Se o menu for muito longo, permite scroll dentro dele */
   }
+
 
   .mobile-sidebar-nav a.mobile-sidebar-nav-item,
   .mobile-sidebar-nav a.mobile-sidebar-nav-item:link,
@@ -809,11 +814,11 @@ a.header-nav-item:hover {
 
 .main-grid-layout {
   display: grid;
-  grid-template-columns: 2fr 3fr;
-  grid-template-rows: auto auto;
+  grid-template-columns: 2fr 3fr; /* Mantém 2 colunas */
+  grid-template-rows: auto auto auto; /* Garante 3 linhas para RaceControl */
   gap: 5px;
   width: 100%;
-  padding: 10px;
+  padding: 10px; /* Padding ao redor de todo o grid */
   box-sizing: border-box;
 }
 
@@ -876,3 +881,135 @@ a.header-nav-item:hover {
   padding: 0;
   margin: 0;
 }
+
+/* --- Estilos para o componente RaceControl --- */
+.race-control-panel {
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 10px;
+  color: var(--text-light);
+  margin-top: 15px; /* Espaço entre SessionResult e RaceControl */
+  display: flex;
+  flex-direction: column;
+  width: 100%; /* Garante que o painel interno ocupe 100% do espaço da célula */
+  box-sizing: border-box;
+  max-height: 50vh; 
+  overflow-y: auto; 
+  overflow-x: hidden;
+
+  /* <-- ALTERAÇÕES AQUI: POSICIONAMENTO E SPAN NA GRID PRINCIPAL --> */
+  grid-column: 1 / -1; /* Ocupa da primeira coluna até a última (span total) */
+  grid-row: 3 / 4;     /* Posicionado na terceira linha */
+}
+
+.race-control-panel h2 {
+  text-align: center;
+  color: var(--accent-green);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em; 
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 10px;
+  font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+/* Estilos para o cabeçalho da tabela de RaceControl (fixo) */
+.race-control-table-header {
+  display: grid;
+  /* Definindo 8 colunas: Date | Driver | Lap | Category | Flag | Scope | Sector | Message */
+  grid-template-columns: 180px 1.0fr 30px 70px 80px 60px 40px 3.5fr; 
+  gap: 8px; /* Espaçamento entre as colunas */
+  
+  background-color: var(--secondary-dark-bg); /* Mesma cor do painel, mas será fixo */
+  color: var(--text-medium);
+  font-family: 'Formula1 Display Bold', sans-serif;
+  font-size: 0.65em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky; /* Fixa o cabeçalho no topo da área de rolagem */
+  top: 0;
+  z-index: 1; /* Garante que fique acima dos itens da lista */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Alinhamento dos textos no cabeçalho */
+.race-control-table-header span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.race-control-table-header .header-rc-date { text-align: left; }
+.race-control-table-header .header-rc-driver { text-align: left; }
+.race-control-table-header .header-rc-lap { text-align: right; }
+.race-control-table-header .header-rc-category { text-align: left; }
+.race-control-table-header .header-rc-flag { text-align: left; }
+.race-control-table-header .header-rc-scope { text-align: left; }
+.race-control-table-header .header-rc-sector { text-align: right; }
+.race-control-table-header .header-rc-message { text-align: left; }
+
+
+/* Container para a lista de eventos (para scroll individual se necessário) */
+/* Removido o scroll aqui, pois o painel principal race-control-panel já é rolavel */
+.race-control-content {
+  overflow-y: auto; /* Permite rolagem vertical para todo o painel */ 
+  flex-grow: 1; /* Ocupa o espaço restante */
+}
+
+/* Estilo da lista UL */
+.race-control-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Estilo para cada item/linha de RaceControl */
+.race-control-item {
+  display: grid;
+  /* MESMO GRID-TEMPLATE-COLUMNS DO CABEÇALHO PARA ALINHAMENTO */
+  grid-template-columns: 180px 1.0fr 30px 70px 80px 60px 40px 3.5fr; 
+  gap: 8px; /* O mesmo gap do cabeçalho */
+  
+  background-color: var(--button-bg); /* Cor de fundo da linha de dados */
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  color: var(--text-light);
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 0.65em; /* Tamanho da fonte dos dados */
+  align-items: center; /* Alinhamento vertical dos itens na linha */
+  transition: background-color 0.2s ease;
+}
+
+.race-control-item:last-child {
+  margin-bottom: 0;
+}
+
+.race-control-item:hover {
+  background-color: var(--button-hover);
+}
+
+/* Alinhamento dos textos nas colunas de dados */
+.race-control-item .rc-date { text-align: left; }
+.race-control-item .rc-driver { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.race-control-item .rc-lap { text-align: right; }
+.race-control-item .rc-category { text-align: left; }
+.race-control-item .rc-flag { text-align: left; }
+.race-control-item .rc-scope { text-align: left; }
+.race-control-item .rc-sector { text-align: right; }
+.race-control-item .rc-message { text-align: left; } /* Mensagem pode ser longa */
+
+/* Estilos da barra de rolagem para o painel RaceControl */
+.race-control-panel::-webkit-scrollbar {
+    width: 8px;
+}
+.race-control-panel::-webkit-scrollbar-track {
+    background: var(--secondary-dark-bg);
+    border-radius: 10px;
+}
+.race-control-panel::-webkit-scrollbar-thumb {
+    background-color: var(--accent-green);
+    border-radius: 10px;
+    border: 2px solid var(--secondary-dark-bg);
+}
+

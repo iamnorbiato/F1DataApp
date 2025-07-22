@@ -134,10 +134,24 @@ class IntervalsSerializer(serializers.ModelSerializer):
         fields = ['session_key', 'driver_number', 'date', 'gap_to_leader', 'interval']
 
 # Serializer para RaceControl
-class RaceControlSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = RaceControl
-        fields = ['session_key', 'session_date', 'driver_number', 'lap_number', 'category', 'flag', 'scope', 'sector', 'message']
+class RaceControlSerializer(serializers.Serializer): # ALTERADO: Herda de serializers.Serializer
+    meeting_key = serializers.IntegerField()
+    session_key = serializers.IntegerField()
+    # session_date já vem formatada como string da View
+    session_date = serializers.CharField(allow_null=True) 
+    driver_number = serializers.IntegerField(allow_null=True)
+    broadcast_name = serializers.CharField(allow_null=True) # Campo adicionado pela View
+    lap_number = serializers.IntegerField(allow_null=True)
+    category = serializers.CharField(max_length=50, allow_null=True)
+    flag = serializers.CharField(max_length=50, allow_null=True)
+    scope = serializers.CharField(max_length=50, allow_null=True)
+    sector = serializers.IntegerField(allow_null=True)
+    message = serializers.CharField(max_length=None, allow_null=True) # max_length=None para TextField
+
+    # REMOVIDO: A classe Meta não é mais necessária para serializers.Serializer
+    # class Meta:
+    #     model = RaceControl
+    #     fields = ['session_key', 'session_date', 'driver_number', 'lap_number', 'category', 'flag', 'scope', 'sector', 'message']
                 
 #Serializer para TeamRadio
 class TeamRadioSerializer(serializers.ModelSerializer):

@@ -45,14 +45,11 @@ function OptionChooserFrame({ menuItemName, onClose, menuItemLabel, onSearchData
   useEffect(() => {
     const fetchYears = async () => {
       try {
-        console.log('DEBUG: Chamando API para buscar anos em:', `${API_BASE_URL}/api/filters/meetings/`);
         const response = await fetch(`${API_BASE_URL}/api/filters/meetings/`);
         const data = await response.json();
-        console.log('DEBUG: Dados de anos recebidos:', data); 
         if (data && data.available_years) {
           const yearsOptions = data.available_years.map(year => ({ value: year, label: String(year) }));
           setAvailableYears(yearsOptions);
-          console.log('DEBUG: availableYears após setAvailableYears:', yearsOptions);
         }
       } catch (error) {
         console.error('Erro ao buscar anos:', error);
@@ -66,10 +63,8 @@ function OptionChooserFrame({ menuItemName, onClose, menuItemLabel, onSearchData
     if (selectedYear) {
       const fetchMeetings = async () => {
         try {
-          console.log(`DEBUG: Chamando API para buscar meetings do ano ${selectedYear} em:`, `${API_BASE_URL}/api/filters/meetings/?year=${selectedYear}`);
           const response = await fetch(`${API_BASE_URL}/api/filters/meetings/?year=${selectedYear}`);
           const data = await response.json();
-          console.log(`DEBUG: Dados de meetings para ${selectedYear} recebidos:`, data);
           if (data) {
             const meetingsOptions = data.map(meeting => ({ 
               value: meeting.meeting_key, 
@@ -77,7 +72,6 @@ function OptionChooserFrame({ menuItemName, onClose, menuItemLabel, onSearchData
               official_name: meeting.meeting_official_name
             }));
             setMeetingsByYear(meetingsOptions);
-            console.log('DEBUG: meetingsByYear após setMeetingsByYear:', meetingsOptions);
           }
         } catch (error) {
           console.error(`Erro ao buscar meetings para o ano ${selectedYear}:`, error);
@@ -92,34 +86,21 @@ function OptionChooserFrame({ menuItemName, onClose, menuItemLabel, onSearchData
   const handleSelectYear = (year) => {
     setSelectedYear(year);
     setSelectedMeeting(null);
-    console.log('DEBUG: Ano selecionado:', year);
   };
 
   const handleSelectMeeting = (meetingKey) => {
     setSelectedMeeting(meetingKey);
-    console.log('DEBUG: Meeting selecionado:', meetingKey);
   };
 
-  // --- CORREÇÃO AQUI: Handler para o botão "Buscar Dados" ---
   const handleSearchButtonClick = () => {
-    console.log('DEBUG: Botão Buscar Dados clicado.');
-    // CORREÇÃO: Converte selectedMeeting para Number antes de usar no find
     const meetingSelectedObject = meetingsByYear.find(m => m.value === Number(selectedMeeting)); // <--- MUDANÇA AQUI!
 
     if (meetingSelectedObject && onSearchData) {
-      console.log('DEBUG: Chamando onSearchData com:', meetingSelectedObject.value, meetingSelectedObject.official_name);
       onSearchData(meetingSelectedObject.value, meetingSelectedObject.official_name);
     } else {
-      console.log('DEBUG: Não é possível buscar dados. Seleção incompleta ou onSearchData não fornecido.');
-      // Adicione um aviso visual para o usuário se a seleção não estiver completa
     }
   };
   // --------------------------------------------------
-
-  console.log('DEBUG: availableYears (render):', availableYears);
-  console.log('DEBUG: selectedYear (render):', selectedYear);
-  console.log('DEBUG: meetingsByYear (render):', meetingsByYear);
-  console.log('DEBUG: selectedMeeting (render):', selectedMeeting);
 
   return (
     <div ref={frameRef} className={`option-chooser-frame ${menuItemName ? 'visible' : ''}`} style={frameStyle}>

@@ -376,19 +376,55 @@ class IntervalsListBySessionAndDriver(generics.ListAPIView):
         return Intervals.objects.filter( session_key=session_key, driver_number=driver_number ).order_by('lap_number')
 
 #Endpoint para listar informações de controle de corrida (RaceControl) filtradas por session_key
-class RaceControlListBySession(generics.ListAPIView):
-    serializer_class = RaceControlSerializer
+class RaceControlListBySession(APIView): # HERDA DE APIView, NÃO generics.ListAPIView como estava antes.
+    def get(self, request, *args, **kwargs):
+        session_key = request.query_params.get('session_key')
 
-    def get_queryset(self):
-        session_key = self.request.query_params.get('session_key')
         if not session_key:
-            raise generics.ValidationError({"error": "O parâmetro 'session_key' é obrigatório."})
+            return Response({"error": "session_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             session_key = int(session_key)
         except ValueError:
-            raise generics.ValidationError({"error": "O parâmetro 'session_key' deve ser um número inteiro."})
+            return Response({"error": "O parâmetro 'session_key' deve ser um número inteiro."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Buscar dados de RaceControl filtrados por session_key
+        race_control_queryset = RaceControl.objects.filter(session_key=session_key).order_by('session_date')
+
+        driver_numbers_in_rc = [
+            rc.driver_number for rc in race_control_queryset if rc.driver_number is not None
+        ]
+        unique_driver_numbers_in_rc = list(set(driver_numbers_in_rc))
+
+        drivers_data = {
+            d.driver_number: d
+            for d in Drivers.objects.filter(driver_number__in=unique_driver_numbers_in_rc)
+        }
+
+        combined_rc_results = []
+        for rc_item in race_control_queryset:
+            driver_obj = drivers_data.get(rc_item.driver_number) # Retorna Driver object ou None
+            
+            formatted_session_date = rc_item.session_date.strftime('%Y-%m-%d %H:%M:%S') if rc_item.session_date else None
+
+            combined_rc_item = {
+                'meeting_key': rc_item.meeting_key,
+                'session_key': rc_item.session_key,
+                'session_date': formatted_session_date, # Data formatada
+                'driver_number': rc_item.driver_number,
+                'broadcast_name': driver_obj.broadcast_name if driver_obj and driver_obj.broadcast_name is not None else None, # NULL se driver_number for NULL ou driver não encontrado
+                'team_name': driver_obj.team_name if driver_obj and driver_obj.team_name is not None else 'Desconhecido',
+                'lap_number': rc_item.lap_number,
+                'category': rc_item.category,
+                'flag': rc_item.flag,
+                'scope': rc_item.scope, # Campo 'scope'
+                'sector': rc_item.sector,
+                'message': rc_item.message,
+            }
+            combined_rc_results.append(combined_rc_item)
         
-        return RaceControl.objects.filter(session_key=session_key).order_by('session_date')
+        serializer = RaceControlSerializer(combined_rc_results, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
         
 # Endpoint para listar Team Radio filtradas por session_key e driver_number
 class TeamRadioListBySessionAndDriver(generics.ListAPIView):
