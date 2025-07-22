@@ -1,4 +1,4 @@
-/* G:\Learning\F1Data\F1Data_Web\src\App.css V24 */
+/* G:\Learning\F1Data\F1Data_Web\src\App.css V32 - RESTORE SESSION RESULTS SCROLL */
 
 /* Variáveis de Tema (Reaproveitadas) */
 :root {
@@ -108,10 +108,10 @@ code {
 
 /* Links do Menu Desktop (NÃO ALTERADO - SEM !IMPORTANT) */
 a.header-nav-item { 
-  color: var(--text-light); /* DEVE SER BRANCO - dependente de como seu ambiente resolve */
+  color: var(--text-light); 
   font-family: 'Formula1 Display Regular', sans-serif;
   font-size: 1.1em;
-  text-decoration: none; /* DEVE REMOVER SUBLINHADO - dependente de como seu ambiente resolve */
+  text-decoration: none; 
   padding: 5px 0;
   transition: color 0.3s ease;
   position: relative; 
@@ -135,10 +135,10 @@ a.header-nav-item:hover {
 /* --- Conteúdo Principal (Abaixo do Header) --- */
 .main-content-area {
   flex-grow: 1;
-  padding: 10px; /* Mantém o padding da área principal */
+  padding: 10px; 
   background-color: var(--primary-dark-bg);
   display: flex;
-  justify-content: flex-start; /* <<< ALTERADO: Alinha o conteúdo (content-display-layout) à esquerda */
+  justify-content: flex-start;
   align-items: flex-start;
   position: relative;
   width: 100%;
@@ -191,9 +191,10 @@ a.header-nav-item:hover {
 /* --- Estilos para o componente MeetingsList --- */
 .meetings-list-container {
   width: 100%;
-  min-width: 350px; /* Mantenha a largura máxima desejada para este contêiner */
-  max-width: 350px; /* Mantenha a largura máxima desejada para este contêiner */
-  /*flex-grow: 1; */ 
+  min-width: 350px; 
+  max-width: 400px; /* Seu max-width original/preferido */
+  flex-grow: 0; 
+  flex-shrink: 0; 
   background-color: var(--secondary-dark-bg);
   border-radius: 12px;
   box-shadow: 0 4px 12px var(--shadow-color);
@@ -203,9 +204,9 @@ a.header-nav-item:hover {
   min-height: 220px;
   max-height: 40vh;
   height: auto;
-  margin-top: 0; /* Pode ajustar para dar espaço do header se preferir */
-  margin-left: 0; /* Garante que ele comece na esquerda dentro do content-display-layout */
-  margin-right: 0; /* Remove o auto para não empurrar */
+  margin-top: 0; 
+  margin-left: 0; 
+  margin-right: 0; 
   color: var(--text-light);
   overflow-y: auto;
   overflow-x: hidden;
@@ -232,7 +233,6 @@ a.header-nav-item:hover {
   scrollbar-color: var(--accent-green) var(--secondary-dark-bg);
 }
 
-/* Estilos para a barra de rolagem de ul dentro de meetings-list-container */
 .meetings-list-container ul::-webkit-scrollbar {
     width: 8px;
 }
@@ -306,7 +306,6 @@ a.header-nav-item:hover {
     padding-right: 10px; 
   }
 
-  /* Sidebar para Mobile (Menu Hambúrguer) - REFORÇADO PARA OCULTAÇÃO NO DESKTOP */
   .mobile-sidebar {
     position: fixed;
     top: 0;
@@ -317,7 +316,7 @@ a.header-nav-item:hover {
     box-shadow: 2px 0 10px rgba(0,0,0,0.7);
     transition: left 0.3s ease-in-out, opacity 0.3s ease, visibility 0.3s ease; 
     z-index: 1000; 
-    display: flex; /* Mantido display:flex por padrão para mobile */
+    display: flex; 
     flex-direction: column;
     padding-top: var(--header-height);
     
@@ -329,12 +328,12 @@ a.header-nav-item:hover {
   @media (min-width: 769px) { 
     .mobile-sidebar,
     .mobile-menu-overlay {
-      display: none !important; /* Força a ocultação no desktop */
+      display: none !important; 
       visibility: hidden !important;
       opacity: 0 !important;
       pointer-events: none !important;
     }
-    .hamburger-menu-button { /* Garante que o botão hambúrguer esteja oculto no desktop */
+    .hamburger-menu-button { 
       display: none !important;
     }
   }
@@ -351,10 +350,9 @@ a.header-nav-item:hover {
     display: flex;
     flex-direction: column;
     padding: 20px;
-    position: relative; /* <-- CORREÇÃO AQUI: Torna este pai posicionado */
-    /* Garante que este contêiner tenha a altura necessária para o dropdown */
+    position: relative; 
     height: 100%; 
-    overflow-y: auto; /* Se o menu for muito longo, permite scroll dentro dele */
+    overflow-y: auto; 
   }
 
 
@@ -363,10 +361,10 @@ a.header-nav-item:hover {
   .mobile-sidebar-nav a.mobile-sidebar-nav-item:visited,
   .mobile-sidebar-nav a.mobile-sidebar-nav-item:hover,
   .mobile-sidebar-nav a.mobile-sidebar-nav-item:active {
-    color: var(--text-light) !important; /* FORÇA A COR BRANCA */
+    color: var(--text-light) !important; 
     font-family: 'Formula1 Display Regular', sans-serif;
     font-size: 1.2em;
-    text-decoration: none !important; /* FORÇA A REMOÇÃO DO SUBLINHADO */
+    text-decoration: none !important; 
     padding: 15px 0;
     border-bottom: 1px solid var(--border-color);
     transition: background-color 0.3s ease;
@@ -422,18 +420,18 @@ a.header-nav-item:hover {
 }
 
 /* Container para o layout lado a lado de Meetings e Sessions */
-.content-display-layout {
+/* REMOVED content-display-layout as main-grid-layout is the direct parent */
+/* .content-display-layout {
   display: flex;
   flex-direction: row;
   gap: 5px;
-  justify-content: flex-start; /* <<< MUDADO AQUI TAMBÉM: para alinhar os itens internos (Meetings e Sessions) à esquerda deles mesmos */
+  justify-content: flex-start;
   align-items: flex-start;
-  width: 100%; /* para que o content-display-layout não ocupe toda a largura */
-  /*max-width: 1200px; /* Mantém um limite superior */
-  padding-left: 0px; /* Exemplo: um padding de 20px na esquerda */
-  padding-right: 20px; /* Para simetria ou se houver algo na direita */
+  width: 100%;
+  padding-left: 0px;
+  padding-right: 20px;
   margin-top: 0;
-}
+} */
 
 /* Painel lateral que contém o título, botão e o componente Sessions */
 .sessions-side-panel {
@@ -541,16 +539,14 @@ a.header-nav-item:hover {
   color: var(--text-light);
   min-width: 300px; /* Largura mínima para o painel do mapa, ajuste conforme necessário */
   flex-shrink: 0; /* Impede que ele encolha */
-  /*width: 740px; /* Largura máxima para o painel do mapa, ajuste conforme necessário */
-  height: 100%;   /* Este */
-  max-height: 100%; /* Este */
-  flex-grow: 1;
-  height: 100%;
-  max-height: 100%; /* Limita o painel, evita SVG estourar tudo */
+  flex-grow: 1; /* Allows it to grow within its grid cell */
   overflow: hidden; /* Garante que ele não "transborde" */
-  grid-column: 2 / 3;
-  grid-row: 1 / 3;
+  /* grid-column e grid-row serão definidos pelo layout pai (races-layout-container) */
   margin-top: 0;
+
+  /* Altura para preencher as linhas do grid */
+  height: 100%; /* Garante que o painel ocupe 100% da altura da célula do grid */
+  max-height: 840px; /* Limita a altura máxima à célula do grid */
 }
 
 .circuit-map-panel h2 {
@@ -583,6 +579,7 @@ a.header-nav-item:hover {
   max-width: 100%; /* Garante que o SVG não seja maior que seu contêiner */
   max-height: 100%; /* Garante que o SVG não seja maior que seu contêiner */
   display: block; /* Remove espaço extra abaixo do SVG */
+  object-fit: contain; /* Adicionado para garantir que o SVG se ajuste sem cortar */
 }
 
 .session-results-table-header span {
@@ -615,8 +612,7 @@ a.header-nav-item:hover {
 
 /* NOVO: Define o GRID TEMPLATE para o CABEÇALHO de Qualifying */
 .session-results-table-header:has(.header-q1) { /* Se tiver header-q1 (ou Q2/Q3), é Qualifying */
-  grid-template-columns: 35px 2fr 70px 70px 70px 70px 70px; /* 7 COLUNAS: Pos | Driver | Q3 | Pos Q2 | Q2 | Pos Q1 | Q1 */
-  /* Ajuste os 70px conforme a necessidade para cada Q-time/Pos */
+  grid-template-columns: 35px 2fr 70px 70px 70px 70px 70px;
 }
 
 /* Estilos para os spans dentro do cabeçalho */
@@ -639,28 +635,29 @@ a.header-nav-item:hover {
 .session-results-table-header .header-q3,
 .session-results-table-header .header-q2,
 .session-results-table-header .header-q1 {
-    text-align: right; /* Alinha tempos de Q à direita */
+    text-align: right;
 }
 .session-results-table-header .header-pos-q2,
 .session-results-table-header .header-pos-q1 {
-    text-align: right; /* Alinha posições Q à direita */
+    text-align: right;
 }
 
 .session-results-panel {
   background-color: var(--secondary-dark-bg);
   border-radius: 12px;
   box-shadow: 0 4px 12px var(--shadow-color);
-  padding: 10px; /* Mantém o padding do painel inteiro */
+  padding: 10px; 
   color: var(--text-light);
   min-width: 300px;
   max-width: 660px; /* Ajuste se quiser um max-width mais próximo de MeetingsList (400px) */
   flex-shrink: 0;
   margin-left: 0px;
-  display: flex; /* Transforma o painel em um contêiner flexível */
-  flex-direction: column; /* Organiza os itens (h2 e conteúdo) em coluna */
+  display: flex;
+  flex-direction: column;
   height: auto;
-  min-height: 220px; /* Mesma altura mínima do meetings-list-container */
-  max-height: 40vh; /* Mesma altura máxima do meetings-list-container */
+  min-height: 220px;
+  /* CORRIGIDO: Restaurado max-height para permitir scroll */
+  max-height: 43vh; /* Restaurado para permitir scroll */
 }
 
 .session-results-panel h2 {
@@ -693,9 +690,8 @@ a.header-nav-item:hover {
   transition: background-color 0.2s ease;
   
   display: grid;
-  /* PADRÃO: Grid para Practice/Race (6 colunas) */
   grid-template-columns: 35px 2fr 60px 130px 1fr 60px; 
-  gap: 8px; /* O mesmo gap das colunas do cabeçalho */
+  gap: 8px;
 
   align-items: center;
   text-decoration: none;
@@ -703,8 +699,7 @@ a.header-nav-item:hover {
 
 /* NOVO: Sobrescreve grid-template-columns para itens de Qualifying */
 .session-results-item.qualifying-layout {
-  grid-template-columns: 35px 2fr 70px 70px 70px 70px 70px; /* 7 COLUNAS: Pos | Driver | Q3 | Pos Q2 | Q2 | Pos Q1 | Q1 */
-  /* Ajuste os 70px conforme a necessidade para cada Q-time/Pos */
+  grid-template-columns: 35px 2fr 70px 70px 70px 70px 70px;
 }
 
 .session-results-item:hover {
@@ -729,10 +724,10 @@ a.header-nav-item:hover {
 
 /* NOVO ESTILO: Para posições como "DQ", "NC" */
 .session-results-item .position.position-status-like {
-  text-align: center; /* Centraliza o texto */
+  text-align: center; 
   font-weight: bold;
-  color: var(--accent-green); /* Usa a cor de destaque (verde) */
-  background-color: rgba(255, 0, 0, 0.3); /* Fundo similar ao status-flag */
+  color: var(--accent-green); 
+  background-color: rgba(255, 0, 0, 0.3); 
   padding: 2px 5px;
   border-radius: 3px;
   white-space: nowrap;
@@ -746,7 +741,7 @@ a.header-nav-item:hover {
   text-overflow: ellipsis; 
 }
 
-.session-results-item .number-of-laps {
+.session-results-item .number_of_laps { /* Corrigido de number-of-laps para number_of_laps se o CSS se referir ao campo do modelo */
   text-align: right; 
   white-space: nowrap;
 }
@@ -766,8 +761,7 @@ a.header-nav-item:hover {
     display: flex;
     justify-content: center;
     align-items: center;
-    /* Certifique-se que o padding aqui não distorce a coluna */
-    padding: 0 2px; /* Pequeno padding para centralizar bem */
+    padding: 0 2px;
 }
 
 .session-results-item .status-flag { 
@@ -778,35 +772,34 @@ a.header-nav-item:hover {
   padding: 2px 5px;
   border-radius: 3px;
   white-space: nowrap;
-  margin: 0; /* Remove margem para evitar empurrar */
+  margin: 0; 
 }
 
-* NOVOS ESTILOS PARA COLUNAS DE QUALIFYING */
-.session-results-item .q-time { /* Para Q1, Q2, Q3 tempos */
+/* NOVOS ESTILOS PARA COLUNAS DE QUALIFYING */
+.session-results-item .q-time { 
     text-align: right;
     white-space: nowrap;
 }
 .session-results-item .pos-q1,
-.session-results-item .pos-q2 { /* Para Pos Q1, Pos Q2 */
+.session-results-item .pos-q2 { 
     text-align: right;
     white-space: nowrap;
 }
 
-/* Estilo para "DNQ" (pode ser usado em q-time) */
 .session-results-item .q-time:contains("DNQ") {
-    color: var(--text-medium); /* Cor mais suave para DNQ */
+    color: var(--text-medium); 
     font-weight: normal;
 }
 
-.left-panel-group {
+.left-panel-group { /* Este é um grupo genérico, pode não ser o que está sendo usado */
   display: flex;
   flex-direction: column;
   gap: 5px;
   flex-shrink: 0;
-  max-width: 620px; /* 300 + 300 + margem */
+  max-width: 620px;
 }
 
-.results-panel-wrapper {
+.results-panel-wrapper { /* Este pode ser um wrapper externo, ou o próprio session-results-panel */
   width: 100%;
   border-radius: 12px;
   padding: 10px;
@@ -814,39 +807,25 @@ a.header-nav-item:hover {
   overflow-y: auto;
 }
 
-.main-grid-layout {
+/* Este .main-grid-layout será substituído pelas classes condicionais no App.js */
+/* .main-grid-layout {
   display: grid;
-  /*grid-template-columns: 2fr 3fr; /* Mantém 2 colunas */
-  grid-template-columns: auto 1fr; /* Coluna 1 (Meetings/Sessions/Drivers) | Coluna 2 (Mapa/Resultados/TrackMap) */
-  grid-template-rows: auto auto auto; /* Garante 3 linhas para RaceControl */
+  grid-template-columns: auto 1fr; 
+  grid-template-rows: auto auto auto; 
   gap: 5px;
   width: 100%;
-  padding: 10px; /* Padding ao redor de todo o grid */
+  padding: 10px;
   box-sizing: border-box;
-}
-
-.left-panel-group {
-  grid-column: 1 / 2;
-  grid-row: 1 / 2;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.results-panel-wrapper {
-  grid-column: 1 / 2;
-  grid-row: 2 / 3;
-}
+} */
 
 
-.left-panel-group-horizontal {
-  display: flex; /* Garante que os itens dentro dele (MeetingsList, Sessions, DriversList) fiquem lado a lado */
+.left-panel-group-horizontal { /* Este é o grupo flex para Meetings/Sessions/Drivers no modo Telemetria */
+  display: flex; 
   flex-direction: row;
   gap: 5px;
-  flex-wrap: nowrap; /* Impede que quebre linha prematuramente se houver espaço */
-  width: 100%; /* Ocupa a largura total da coluna do grid */
-  grid-column: 1 / 2; /* Mantém na primeira coluna do main-grid-layout */
-  grid-row: 1 / 2;
+  flex-wrap: nowrap; 
+  width: 100%; 
+  /* grid-column e grid-row serão definidos pelos layouts pais (.races-layout-container ou .telemetry-layout-container) */
 }
 
 .session-results-panel::-webkit-scrollbar {
@@ -863,11 +842,11 @@ a.header-nav-item:hover {
 }
 
 .session-results-content {
-  flex-grow: 1; /* Faz com que esta div ocupe todo o espaço vertical disponível */
-  overflow-y: auto; /* AQUI é onde o scroll vertical acontecerá */
-  overflow-x: hidden; /* Evita scroll horizontal */
-  scrollbar-width: thin; /* Para Firefox */
-  scrollbar-color: var(--accent-green) var(--secondary-dark-bg); /* Para Firefox */
+  flex-grow: 1; 
+  overflow-y: auto; /* Garante o scrollbar */
+  overflow-x: hidden; 
+  scrollbar-width: thin; 
+  scrollbar-color: var(--accent-green) var(--secondary-dark-bg); 
 }
 
 .session-results-content::-webkit-scrollbar {
@@ -896,18 +875,17 @@ a.header-nav-item:hover {
   box-shadow: 0 4px 12px var(--shadow-color);
   padding: 10px;
   color: var(--text-light);
-  margin-top: 15px; /* Espaço entre SessionResult e RaceControl */
+  /* CORRIGIDO: Removido margin-top, o gap do grid será o suficiente */
+  margin-top: 0px; /* Definido para 0px para confiar no grid gap */ 
   display: flex;
   flex-direction: column;
-  width: 100%; /* Garante que o painel interno ocupe 100% do espaço da célula */
+  width: 100%; 
   box-sizing: border-box;
   max-height: 50vh; 
   overflow-y: auto; 
   overflow-x: hidden;
 
-  /* <-- ALTERAÇÕES AQUI: POSICIONAMENTO E SPAN NA GRID PRINCIPAL --> */
-  grid-column: 1 / -1; /* Ocupa da primeira coluna até a última (span total) */
-  grid-row: 3 / 4;     /* Posicionado na terceira linha */
+  /* grid-column e grid-row serão definidos pelos layouts pais */
 }
 
 .race-control-panel h2 {
@@ -924,19 +902,18 @@ a.header-nav-item:hover {
 /* Estilos para o cabeçalho da tabela de RaceControl (fixo) */
 .race-control-table-header {
   display: grid;
-  /* Definindo 8 colunas: Date | Driver | Lap | Category | Flag | Scope | Sector | Message */
   grid-template-columns: 180px 1.0fr 30px 70px 80px 60px 40px 3.5fr; 
-  gap: 8px; /* Espaçamento entre as colunas */
+  gap: 8px; 
   
-  background-color: var(--secondary-dark-bg); /* Mesma cor do painel, mas será fixo */
+  background-color: var(--secondary-dark-bg); 
   color: var(--text-medium);
   font-family: 'Formula1 Display Bold', sans-serif;
   font-size: 0.65em;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-color);
-  position: sticky; /* Fixa o cabeçalho no topo da área de rolagem */
+  position: sticky; 
   top: 0;
-  z-index: 1; /* Garante que fique acima dos itens da lista */
+  z-index: 1; 
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
@@ -953,14 +930,13 @@ a.header-nav-item:hover {
 .race-control-table-header .header-rc-flag { text-align: left; }
 .race-control-table-header .header-rc-scope { text-align: left; }
 .race-control-table-header .header-rc-sector { text-align: right; }
-.race-control-table-header .header-rc-message { text-align: left; }
+.race-control-table-header .header-rc-message { text-align: left; } 
 
 
 /* Container para a lista de eventos (para scroll individual se necessário) */
-/* Removido o scroll aqui, pois o painel principal race-control-panel já é rolavel */
 .race-control-content {
-  overflow-y: auto; /* Permite rolagem vertical para todo o painel */ 
-  flex-grow: 1; /* Ocupa o espaço restante */
+  overflow-y: auto; 
+  flex-grow: 1; 
 }
 
 /* Estilo da lista UL */
@@ -973,18 +949,17 @@ a.header-nav-item:hover {
 /* Estilo para cada item/linha de RaceControl */
 .race-control-item {
   display: grid;
-  /* MESMO GRID-TEMPLATE-COLUMNS DO CABEÇALHO PARA ALINHAMENTO */
   grid-template-columns: 180px 1.0fr 30px 70px 80px 60px 40px 3.5fr; 
-  gap: 8px; /* O mesmo gap do cabeçalho */
+  gap: 8px;
   
-  background-color: var(--button-bg); /* Cor de fundo da linha de dados */
+  background-color: var(--button-bg); 
   border-radius: 5px;
   padding: 8px 10px;
   margin-bottom: 8px;
   color: var(--text-light);
   font-family: 'Formula1 Display Regular', sans-serif;
-  font-size: 0.65em; /* Tamanho da fonte dos dados */
-  align-items: center; /* Alinhamento vertical dos itens na linha */
+  font-size: 0.65em; 
+  align-items: center; 
   transition: background-color 0.2s ease;
 }
 
@@ -1004,7 +979,7 @@ a.header-nav-item:hover {
 .race-control-item .rc-flag { text-align: left; }
 .race-control-item .rc-scope { text-align: left; }
 .race-control-item .rc-sector { text-align: right; }
-.race-control-item .rc-message { text-align: left; } /* Mensagem pode ser longa */
+.race-control-item .rc-message { text-align: left; } 
 
 /* Estilos da barra de rolagem para o painel RaceControl */
 .race-control-panel::-webkit-scrollbar {
@@ -1028,8 +1003,8 @@ a.header-nav-item:hover {
   padding: 10px;
   color: var(--text-light);
   min-width: 300px;
-  width: 700px; /* Garante que ocupe toda a largura disponível */
-  flex-grow: 1; /* Permite que ocupe o espaço disponível na horizontal */
+  /* width: 700px; /* Garante que ocupe toda a largura disponível */ /* Será controlado pelo grid pai */
+  /*flex-grow: 1; /* Permite que ocupe o espaço disponível na horizontal */ /* Controlado pelo flex pai */
   flex-shrink: 0; /* Impede que ele encolha menos que seu min-width */
   height: auto;
   min-height: 220px;
@@ -1062,9 +1037,9 @@ a.header-nav-item:hover {
   font-size: 0.7em;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-color);
-  position: sticky; /* Fixa o cabeçalho no topo da área de rolagem */
+  position: sticky; 
   top: 0;
-  z-index: 1; /* Garante que fique acima dos itens da lista */
+  z-index: 1; 
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
@@ -1101,14 +1076,14 @@ a.header-nav-item:hover {
   grid-template-columns: 40px 2fr 1.5fr; 
   gap: 8px; /* O mesmo gap do cabeçalho */
   
-  background-color: var(--button-bg); /* Cor de fundo da linha de dados */
+  background-color: var(--button-bg); 
   border-radius: 5px;
   padding: 8px 10px;
   margin-bottom: 8px;
   color: var(--text-light);
   font-family: 'Formula1 Display Regular', sans-serif;
-  font-size: 0.8em; /* Tamanho da fonte dos dados */
-  align-items: center; /* Alinhamento vertical dos itens na linha */
+  font-size: 0.8em; 
+  align-items: center; 
   transition: background-color 0.2s ease;
   cursor: pointer; /* Indica que é clicável */
 }
@@ -1159,3 +1134,161 @@ a.header-nav-item:hover {
     border-radius: 10px;
     border: 2px solid var(--secondary-dark-bg);
 }
+
+/* --- Estilos para o container do TrackMap (telemetry-display-panel) --- */
+.telemetry-display-panel {
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  padding: 10px;
+  color: var(--text-light);
+  display: flex;
+  flex-direction: column;
+  
+  /* Estes são estilos base, o posicionamento no grid virá do pai (.telemetry-layout-container) */
+  flex-grow: 1; /* Permite que ele cresça */
+  min-width: 400px; /* Um mínimo razoável */
+  height: 60vh; /* Altura conforme pedido (MeetingsList + 50%) */
+  max-height: 80vh; /* Limite */
+  overflow: hidden;
+  margin-left: auto; /* Centraliza na coluna se for mais larga */
+  margin-right: auto;
+}
+
+/* Estilos para os controles de navegação do TrackMap */
+.telemetry-navigation-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.telemetry-nav-button {
+  background-color: var(--button-bg);
+  color: var(--text-light);
+  border: none;
+  border-radius: 5px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-family: 'Formula1 Display Regular', sans-serif;
+  font-size: 0.9em;
+}
+
+.telemetry-nav-button:hover:not(:disabled) {
+  background-color: var(--button-hover);
+  color: var(--accent-green);
+}
+
+.telemetry-nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.telemetry-current-time {
+  font-family: 'Formula1 Display Bold', sans-serif;
+  color: var(--accent-green);
+  font-size: 1.1em;
+  min-width: 100px;
+  text-align: center;
+}
+
+/* --- INÍCIO: NOVAS CLASSES DE LAYOUT CONDICIONAL (BASEADAS NO APP.JS) --- */
+
+/* LAYOUT PARA O MODO "CORRIDAS" - Aplicado ao div com classe 'races-layout-container' no App.js */
+.races-layout-container {
+  display: grid;
+  /* Colunas: 1ª para Meetings (auto), 2ª para Sessions (auto), 3ª para Traçado (1fr) */
+  grid-template-columns: auto auto 1fr; 
+  /* Linhas: 1ª para trio superior, 2ª para Resultados (e Traçado continua), 3ª para RaceControl */
+  grid-template-rows: auto auto auto; 
+  gap: 5px; /* CORRIGIDO: Gap para 5px */
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  align-items: start; /* Alinha ao topo */
+}
+
+/* Posicionamento dos elementos DENTRO de .races-layout-container (Modo Corridas) */
+/* Nota: Todos os componentes aqui são filhos diretos do grid */
+.races-layout-container .meetings-list-container {
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+}
+
+.races-layout-container .sessions-side-panel {
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+}
+
+.races-layout-container .circuit-map-panel { /* Traçado */
+  grid-column: 3 / 4; /* Coluna 3 */
+  grid-row: 1 / 3;    /* Abrange 2 linhas (L1 e L2) */
+  /* height: 100%; e max-height: 100% já estão no .circuit-map-panel geral */
+}
+
+.races-layout-container .session-results-panel { /* Resultados da Sessao */
+  grid-column: 1 / 3; /* **CRÍTICO: Ocupa Coluna 1 e Coluna 2** para "encostar" no Traçado e preencher o espaço */
+  grid-row: 2 / 3;    /* Segunda linha */
+  /* max-height: 40vh do .session-results-panel geral foi restaurado para permitir scroll */
+}
+
+.races-layout-container .race-control-panel {
+  grid-column: 1 / -1; /* Ocupa todas as colunas */
+  grid-row: 3 / 4;     /* Terceira linha */
+}
+
+
+/* LAYOUT PARA O MODO "TELEMETRIA" - Aplicado ao div com classe 'telemetry-layout-container' no App.js */
+.telemetry-layout-container {
+  display: grid;
+  /* Colunas: 1ª para Meetings (auto), 2ª para Sessions (auto), 3ª para Drivers (1fr) */
+  grid-template-columns: auto auto 1fr; /* auto para as 2 primeiras (fixed width), 1fr para a 3ª (DriversList) */
+  /* Linhas: 1ª para o trio superior, 2ª para TrackMap */
+  grid-template-rows: auto auto; 
+  gap: 5px; /* CORRIGIDO: Gap para 5px */
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  align-items: start;
+}
+
+/* Posicionamento dos elementos DENTRO de .telemetry-layout-container (Modo Telemetria) */
+/* Nota: MeetingsList, Sessions, DriversList, telemetry-display-panel são filhos diretos do grid */
+.telemetry-layout-container .meetings-list-container {
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+}
+.telemetry-layout-container .sessions-side-panel {
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+}
+.telemetry-layout-container .drivers-list-panel {
+  grid-column: 3 / 4; /* Coluna 3 */
+  grid-row: 1 / 2;    /* Linha 1 */
+  /* No modo Telemetria, o DriversList deve ocupar o espaço restante na linha 1 */
+  max-width: none; /* Garante que ele não seja limitado por um max-width fixo externo */
+  flex-grow: 1; /* Permite que ele preencha o espaço restante na célula da grid */
+}
+
+/* Posicionamento do TrackMap para Telemetria - Conforme a imagem */
+.telemetry-layout-container .telemetry-display-panel {
+  grid-column: 1 / -1; /* Ocupa todas as 3 colunas */
+  grid-row: 2 / 3;    /* E fica na SEGUNDA linha (abaixo do trio superior) */
+  
+  /* Largura: Metade da tela na horizontal */
+  /* '20px' é o padding total da main-content-area (10px esq + 10px dir).
+     '2 * 5px' é o gap entre as colunas (5px entre C1-C2 e 5px entre C2-C3). */
+  max-width: calc(50vw - 20px - 2 * 5px); 
+  height: 60vh; /* Altura conforme pedido (MeetingsList + 50%) */
+  margin-left: auto; /* Centraliza o painel dentro da área que ele ocupa no grid */
+  margin-right: auto;
+}
+
+/* RaceControlPanel no modo Telemetria NÃO APARECE (visibilidade controlada no App.js) */
+/* Não precisa de regras de grid aqui para ele neste layout, pois ele não é renderizado */
+
+/* FIM: NOVAS CLASSES DE LAYOUT CONDICIONAL */

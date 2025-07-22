@@ -1,9 +1,10 @@
 // G:\Learning\F1Data\F1Data_Web\src\DriversList.js
-
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from './api';
 console.log('API_BASE_URL:', API_BASE_URL);
 
+// MODIFICADO: Agora recebe a prop onDriverSelect (callback do pai)
+// Também recebe selectedDriverNumber para aplicar a classe 'active'
 function DriversList({ sessionKey, onDriverSelect, selectedDriverNumber }) {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,11 +37,13 @@ function DriversList({ sessionKey, onDriverSelect, selectedDriverNumber }) {
     fetchDrivers();
   }, [sessionKey, API_BASE_URL]);
 
+  // INÍCIO DA CORREÇÃO: Passa o OBJETO COMPLETO do driver
   const handleDriverClick = (driver) => {
     if (onDriverSelect) {
-      onDriverSelect(driver.driver_number);
+      onDriverSelect(driver); // Passa o OBJETO 'driver' completo para o pai
     }
   };
+  // FIM DA CORREÇÃO
 
   if (loading) {
     return (
@@ -85,11 +88,8 @@ function DriversList({ sessionKey, onDriverSelect, selectedDriverNumber }) {
               className={`driver-list-item ${selectedDriverNumber === driver.driver_number ? 'active' : ''}`}
               onClick={() => handleDriverClick(driver)}
             >
-              {/* Coluna 1: driver_number */}
               <span className="driver-num">{driver.driver_number}</span>
-              {/* Coluna 2 e 3 combinadas para Piloto (Acrônimo e Nome Completo) */}
               <span className="driver-pilot">{driver.name_acronym} - {driver.full_name}</span>
-              {/* Coluna 4: Team Name */}
               <span className="driver-team" style={{ color: `#${driver.team_colour}` }}>{driver.team_name}</span>
             </li>
           ))}

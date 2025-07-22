@@ -10,8 +10,19 @@ import RaceControl from './RaceControl';
 import DriversList from './DriversList';
 // NOVO: Importar TrackMap
 import TrackMap from './TrackMap';
-import { API_BASE_URL } from './api';
+// INÍCIO DA CORREÇÃO: Sintaxe de importação da API_BASE_URL
+import { API_BASE_URL } from './api'; // CORRIGIDO: de ' = require' para 'from'
+// FIM DA CORREÇÃO
 console.log('API_BASE_URL:', API_BASE_URL);
+
+// Função para converter uma data para ISO string UTC com "Z" no final
+function toUTCISOString(dateStr) {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  if (isNaN(date)) return null; // Verifica data inválida
+
+  return date.toISOString();
+}
 
 function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -23,12 +34,11 @@ function App() {
   const [selectedCircuitShortName, setSelectedCircuitShortName] = useState(null);
   const [selectedSessionKey, setSelectedSessionKey] = useState(null);
   const [circuitRef, setCircuitRef] = useState(null);
-  const [menuOrigin, setMenuOrigin] = useState(null);
+  const [menuOrigin, setMenuOrigin] = useState(null); // 'races' ou 'telemetry'
   const [selectedDriverNumber, setSelectedDriverNumber] = useState(null);
-  // NOVOS ESTADOS: Para armazenar as datas da sessão
+  const [selectedDriverObject, setSelectedDriverObject] = useState(null); // Objeto completo do driver
   const [selectedSessionStartDate, setSelectedSessionStartDate] = useState(null);
   const [selectedSessionEndDate, setSelectedSessionEndDate] = useState(null);
-  // FIM NOVOS ESTADOS
 
   const handleHamburgerClick = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -58,6 +68,7 @@ function App() {
     setSelectedSessionEndDate(null);   // Resetar
     setCircuitRef(null);
     setSelectedDriverNumber(null);
+    setSelectedDriverObject(null); // Resetar selectedDriverObject
 
     if (availableYears.length === 0) {
       try {
@@ -85,6 +96,7 @@ function App() {
     setSelectedSessionEndDate(null);   // Resetar
     setCircuitRef(null);
     setSelectedDriverNumber(null);
+    setSelectedDriverObject(null); // Resetar selectedDriverObject
     setShowYearDropdown(false);
     if (isMobileMenuOpen) setIsMobileMenuOpen(false);
   };
@@ -98,6 +110,7 @@ function App() {
     setSelectedSessionEndDate(null);   // Resetar
     setCircuitRef(null);
     setSelectedDriverNumber(null);
+    setSelectedDriverObject(null); // Resetar selectedDriverObject
 
     if (menuOrigin === 'races' && circuitKeyForCircuit) {
       try {
@@ -126,18 +139,19 @@ function App() {
     if (isMobileMenuOpen) setIsMobileMenuOpen(false);
   };
 
-  // MODIFICADO: handleSessionSelect agora recebe dateEnd também
   const handleSessionSelect = (sessionKey, sessionName, dateStart, dateEnd) => {
     setSelectedSessionKey(sessionKey);
     setSelectedSessionStartDate(dateStart); // Salva a data de início
     setSelectedSessionEndDate(dateEnd);     // Salva a data de fim
     setSelectedDriverNumber(null); // Reseta o driver selecionado ao mudar a sessão
+    setSelectedDriverObject(null); // Resetar selectedDriverObject
     console.log(`Sessão selecionada: ${sessionKey}, ${sessionName}, ${dateStart} (Origem: ${menuOrigin})`);
   };
 
-  const handleDriverSelect = (driverNumber) => {
-    setSelectedDriverNumber(driverNumber);
-    console.log(`Driver selecionado: ${driverNumber}`);
+  const handleDriverSelect = (driverObject) => { // driverObject é o objeto completo do driver
+    setSelectedDriverNumber(driverObject.driver_number); // Apenas o número para o estado (usado no estilo 'active' de DriversList)
+    setSelectedDriverObject(driverObject); // Guarda o objeto completo para o TrackMap
+    console.log(`Driver selecionado: ${driverObject.driver_number}`);
   };
 
   return (
@@ -183,9 +197,10 @@ function App() {
 
       <main className="main-content-area">
         {selectedYear && (
-          <div className="main-grid-layout">
-            {/* Primeira linha do Grid: MeetingsList, Sessions, DriversList */}
-            <div className="left-panel-group-horizontal">
+          // INÍCIO DA CORREÇÃO: Usando operador ternário para garantir um único elemento raiz de layout
+          menuOrigin === 'races' ? (
+            <div className="races-layout-container"> {/* ESTE define o grid para Corridas */}
+              {/* Painéis para o modo "Corridas" - Direto no Grid */}
               <MeetingsList
                 selectedYear={selectedYear}
                 onMeetingSelect={handleMeetingSelect}
@@ -201,48 +216,63 @@ function App() {
                   />
                 </div>
               )}
-
-              {menuOrigin === 'telemetry' && selectedSessionKey && (
+              {selectedSessionKey && (
+                <SessionResultsPanel sessionKey={selectedSessionKey} />
+              )}
+              {selectedSessionKey && circuitRef && (
+                <CircuitMapPanel
+                  circuitref={circuitRef}
+                  selectedSessionKey={selectedSessionKey}
+                  circuitShortName={selectedCircuitShortName}
+                />
+              )}
+              {selectedSessionKey && (
+                <RaceControl sessionKey={selectedSessionKey} />
+              )}
+            </div>
+          ) : menuOrigin === 'telemetry' ? (
+            <div className="telemetry-layout-container"> {/* ESTE define o grid para Telemetria */}
+              {/* Painéis para o modo "Telemetria" - Direto no Grid */}
+              <MeetingsList
+                selectedYear={selectedYear}
+                onMeetingSelect={handleMeetingSelect}
+                selectedMeetingKey={selectedMeetingKey}
+              />
+              {selectedMeetingKey && (
+                <div className="sessions-side-panel">
+                  <h2>Sessões de {selectedCircuitShortName || selectedMeetingName || 'Corrida Selecionada'}</h2>
+                  <Sessions
+                    meetingKey={selectedMeetingKey}
+                    onSessionSelect={handleSessionSelect}
+                    selectedSessionKey={selectedSessionKey}
+                  />
+                </div>
+              )}
+              {selectedSessionKey && (
                 <div className="drivers-side-panel">
                     <DriversList
                       sessionKey={selectedSessionKey}
                       onDriverSelect={handleDriverSelect}
-                      selectedDriverNumber={selectedDriverNumber}
+                      selectedDriverNumber={selectedDriverNumber} // Para o estilo 'active'
                     />
                 </div>
               )}
+              {selectedSessionKey && selectedDriverObject && (
+                <div className="telemetry-display-panel">
+                  <TrackMap
+                    sessionKey={selectedSessionKey}
+                    selectedDriver={selectedDriverObject}
+                    startDate={toUTCISOString(selectedSessionStartDate)}
+                    endDate={toUTCISOString(selectedSessionEndDate)}
+                  />
+                </div>
+              )}
             </div>
-
-            {/* Segunda linha do Grid: CircuitMapPanel (se for 'races') ou TrackMap (se for 'telemetry') */}
-            {menuOrigin === 'races' && selectedSessionKey && circuitRef && (
-              <CircuitMapPanel
-                circuitref={circuitRef}
-                selectedSessionKey={selectedSessionKey}
-                circuitShortName={selectedCircuitShortName}
-              />
-            )}
-
-            {menuOrigin === 'races' && selectedSessionKey && (
-              <SessionResultsPanel sessionKey={selectedSessionKey} />
-            )}
-
-            {menuOrigin === 'races' && selectedSessionKey && (
-              <RaceControl sessionKey={selectedSessionKey} />
-            )}
-
-            {/* NOVO: Renderização condicional para TrackMap */}
-            {menuOrigin === 'telemetry' && selectedSessionKey && selectedDriverNumber && (
-              <div className="telemetry-display-panel"> {/* Novo container para telemetria */}
-                <TrackMap
-                  sessionKey={selectedSessionKey}
-                  selectedDriver={selectedDriverNumber} // Passa o número do driver
-                  startDate={selectedSessionStartDate} // Passa a data de início da sessão
-                  endDate={selectedSessionEndDate}     // Passa a data de fim da sessão
-                />
-              </div>
-            )}
-
-          </div>
+          ) : (
+            // Renderiza nada se selectedYear é true mas nenhum menuOrigin está ativo (ex: estado inicial)
+            null
+          )
+          // FIM DA CORREÇÃO
         )}
       </main>
     </div>
