@@ -1156,7 +1156,7 @@ a.header-nav-item:hover {
 }
 
 /* Estilos para os controles de navegação do TrackMap */
-.telemetry-navigation-controls {
+.track-map-controls {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1166,7 +1166,7 @@ a.header-nav-item:hover {
   border-top: 1px solid var(--border-color);
 }
 
-.telemetry-nav-button {
+.track-map-nav-button {
   background-color: var(--button-bg);
   color: var(--text-light);
   border: none;
@@ -1178,17 +1178,17 @@ a.header-nav-item:hover {
   font-size: 0.9em;
 }
 
-.telemetry-nav-button:hover:not(:disabled) {
+.track-map-nav-button:hover:not(:disabled) {
   background-color: var(--button-hover);
   color: var(--accent-green);
 }
 
-.telemetry-nav-button:disabled {
+.track-map-nav-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.telemetry-current-time {
+.track-map-current-time {
   font-family: 'Formula1 Display Bold', sans-serif;
   color: var(--accent-green);
   font-size: 1.1em;
