@@ -386,7 +386,7 @@ class Circuit(models.Model):
 
     class Meta:
         managed = False  # Django não controla criação/alteração da tabela
-        db_table = 'f1data"."circuits'  # schema + tabela
+        db_table = 'circuits'  # schema + tabela
         unique_together = (('circuitref',),)  # índice único para circuitref (opcional, já tem unique=True)
 
     def __str__(self):

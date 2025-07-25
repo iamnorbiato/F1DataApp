@@ -55,8 +55,9 @@ class MeetingSerializer(serializers.ModelSerializer):
 class SessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sessions
-        fields = ['session_key', 'date_start', 'session_name'] #, 'circuit_short_name']
-        
+        # CORREÇÃO CRÍTICA: Adicione 'date_end' aqui!
+        fields = ['session_key', 'date_start', 'date_end', 'session_name']
+                
 # Serializer para Drivers
 class DriversSerializer(serializers.ModelSerializer):
     class Meta:

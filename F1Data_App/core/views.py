@@ -486,7 +486,7 @@ class LocationListBySessionAndDriver(generics.ListAPIView):
         except ValueError:
             raise ValidationError({"error": "Parâmetros inválidos. 'session_key' e 'driver_number' devem ser inteiros, e 'date' deve estar no formato ISO 8601."})
 
-        date_limit = date + timedelta(minutes=10)
+        date_limit = date + timedelta(minutes=20)
 
         return Location.objects.filter(
             session_key=session_key,

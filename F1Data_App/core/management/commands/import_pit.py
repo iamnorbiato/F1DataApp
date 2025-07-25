@@ -7,91 +7,90 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
-from django.conf import settings 
+from django.conf import settings
 
 # Importa os modelos necessários
-from core.models import Drivers, Sessions, Pit 
+from core.models import Drivers, Sessions, Pit, Meetings # Adicionado Meetings para obter todos os meeting_keys, se necessário
 from dotenv import load_dotenv
 from update_token import update_api_token_if_needed
 import pytz # Para manipulação de fusos horários
 
-ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') 
+ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
 class Command(BaseCommand):
     help = 'Importa dados de pit stops da API OpenF1 e os insere na tabela pit do PostgreSQL usando ORM.'
 
-    API_URL = "https://api.openf1.org/v1/pit" # URL da API para pit stops
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
+    API_URL = "https://api.openf1.org/v1/pit"
 
     API_DELAY_SECONDS = 0.2
-    API_MAX_RETRIES = 3 
-    API_RETRY_DELAY_SECONDS = 5 
-    BULK_SIZE = 5000 
+    API_MAX_RETRIES = 3
+    API_RETRY_DELAY_SECONDS = 5
+    BULK_SIZE = 5000
 
-    warnings_count = 0
+    # Contadores e lista de avisos serão inicializados no handle() para cada execução.
 
-    def get_config_value(self, key=None, default=None, section=None):
-        config = {}
-        if not os.path.exists(self.CONFIG_FILE):
-            self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
-            self.warnings_count += 1
-            return default
-        try:
-            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+    def add_arguments(self, parser):
+        parser.add_argument('--meeting_key', type=int, help='Especifica um Meeting Key para filtrar a importação (opcional).')
+        parser.add_argument('--mode', choices=['I', 'U'], default='I',
+                            help='Modo de operação: I=Insert apenas (padrão), U=Update (atualiza existentes e insere novos).')
 
-            if section:
-                section_data = config.get(section, default if key is None else {})
-                if key is None:
-                    return section_data
-                else:
-                    return section_data.get(key, default)
-            else:
-                if key is None:
-                    return config
-                else:
-                    return config.get(key, default)
+    def add_warning(self, message):
+        # Inicializa se não estiverem inicializados (para segurança, embora handle os inicialize)
+        if not hasattr(self, 'warnings_count'):
+            self.warnings_count = 0
+            self.all_warnings_details = []
+        self.warnings_count += 1
+        self.all_warnings_details.append(message)
+        self.stdout.write(self.style.WARNING(message))
 
-        except json.JSONDecodeError as e:
-            raise CommandError(f"Erro ao ler/parsear o arquivo de configuração JSON '{self.CONFIG_FILE}': {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
-
-    def get_race_session_driver_triplets_to_process(self):
+    def get_relevant_session_driver_pairs_to_fetch(self, meeting_key_filter=None, mode='I'):
         """
-        Identifica triplas (meeting_key, session_key, driver_number) que são do tipo 'Race'
-        e que ainda não têm dados de pit stops importados na tabela 'pit'.
-        Retorna uma lista de tuplas (meeting_key, session_key, driver_number) a serem processadas.
+        Identifica pares (meeting_key, session_key) de *todas* as sessões e associa a eles os driver_numbers relevantes.
+        Filtra por meeting_key e modo ('I' para apenas novos, 'U' para todos relevantes).
+        Retorna um dicionário: {(m_key, s_key): {driver_number_1, driver_number_2, ...}}
         """
-        self.stdout.write(self.style.MIGRATE_HEADING("Identificando triplas (meeting_key, session_key, driver_number) para sessões 'Race' de drivers..."))
-        
-        self.stdout.write(f"Buscando pares (meeting_key, session_key) de sessões 'Race'...")
-        race_sessions_pairs = set(
-            Sessions.objects.filter(session_type='Race').values_list('meeting_key', 'session_key')
-        )
-        self.stdout.write(f"Encontrados {len(race_sessions_pairs)} pares (meeting_key, session_key) para sessões 'Race'.")
+        self.stdout.write(self.style.MIGRATE_HEADING("Identificando pares (meeting_key, session_key) e drivers relevantes para 'Pit'..."))
 
-        self.stdout.write(f"Buscando todas as triplas de drivers (meeting_key, session_key, driver_number) da tabela 'drivers'...")
-        all_driver_triplets = set(
-            Drivers.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
-        )
-        self.stdout.write(f"Encontradas {len(all_driver_triplets)} triplas de drivers.")
+        # Obter *todas* as sessões (removido o filtro session_type='Race')
+        sessions_query = Sessions.objects.all()
+        if meeting_key_filter:
+            sessions_query = sessions_query.filter(meeting_key=meeting_key_filter)
 
+        all_sessions = set(sessions_query.values_list('meeting_key', 'session_key'))
+        self.stdout.write(f"Encontrados {len(all_sessions)} pares (meeting_key, session_key) para todas as sessões{' para o meeting_key especificado' if meeting_key_filter else ''}.")
+
+        # Obter todas as triplas de drivers para as sessões relevantes
         relevant_driver_triplets = set(
-            (m, s, d) for m, s, d in all_driver_triplets if (m, s) in race_sessions_pairs
+            Drivers.objects.filter(
+                meeting_key__in=[pair[0] for pair in all_sessions],
+                session_key__in=[pair[1] for pair in all_sessions]
+            ).values_list('meeting_key', 'session_key', 'driver_number')
         )
-        self.stdout.write(f"Filtradas {len(relevant_driver_triplets)} triplas de drivers para sessões 'Race'.")
+        self.stdout.write(f"Encontradas {len(relevant_driver_triplets)} triplas de drivers relevantes para todas as sessões.")
 
-        self.stdout.write("Buscando triplas já presentes na tabela 'pit'...")
-        existing_pit_triplets = set(
-            Pit.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
-        )
-        self.stdout.write(f"Encontradas {len(existing_pit_triplets)} triplas já presentes na tabela 'pit'.")
+        final_pairs_drivers_map = {}
 
-        triplets_to_process = sorted(list(relevant_driver_triplets - existing_pit_triplets))
+        if mode == 'I':
+            # Para 'I', precisamos subtrair o que já existe em Pit (considerando M,S,D)
+            existing_pit_msd_triplets = set(
+                Pit.objects.filter(
+                    meeting_key__in=[pair[0] for pair in all_sessions],
+                    session_key__in=[pair[1] for pair in all_sessions]
+                ).values_list('meeting_key', 'session_key', 'driver_number')
+            )
+            drivers_to_consider_for_fetch = relevant_driver_triplets - existing_pit_msd_triplets
+            self.stdout.write(f"Modo 'I': {len(drivers_to_consider_for_fetch)} triplas de drivers/sessões serão consideradas para busca de novos pit stops.")
+        else: # mode == 'U'
+            drivers_to_consider_for_fetch = relevant_driver_triplets
+            self.stdout.write(f"Modo 'U': Todas as {len(drivers_to_consider_for_fetch)} triplas de drivers/sessões relevantes serão consideradas para atualização/inserção.")
+
+        # Organiza por (meeting_key, session_key) para chamadas de API
+        for m_key, s_key, d_num in drivers_to_consider_for_fetch:
+            final_pairs_drivers_map.setdefault((m_key, s_key), set()).add(d_num)
         
-        self.stdout.write(self.style.SUCCESS(f"Identificadas {len(triplets_to_process)} triplas (M,S,D) de drivers de sessões 'Race' que precisam de dados de pit stops."))
-        return triplets_to_process
+        self.stdout.write(self.style.SUCCESS(f"Identificados {len(final_pairs_drivers_map)} pares (M,S) únicos para buscar dados de 'Pit' na API."))
+        return final_pairs_drivers_map
+
 
     def fetch_pit_stops_data(self, session_key, use_token=True):
         if not session_key:
@@ -104,13 +103,11 @@ class Command(BaseCommand):
         if use_token:
             api_token = os.getenv('OPENF1_API_TOKEN')
             if not api_token:
-                self.warnings_count += 1
-                raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
+                self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
             else:
                 headers["Authorization"] = f"Bearer {api_token}"
         else:
-            self.warnings_count += 1
-            pass
+            self.add_warning("Uso do token desativado (use_token=False). Requisição será feita sem Authorization.")
 
         for attempt in range(self.API_MAX_RETRIES):
             try:
@@ -119,158 +116,229 @@ class Command(BaseCommand):
                 return response.json()
             except requests.exceptions.RequestException as e:
                 status_code = getattr(response, 'status_code', 'Unknown')
-                if status_code in [500, 502, 503, 504] and attempt < self.API_MAX_RETRIES - 1:
+                error_msg = f"Erro {status_code} da API para URL: {url} - {e}"
+                if status_code in [500, 502, 503, 504, 401, 403] and attempt < self.API_MAX_RETRIES - 1:
                     delay = self.API_RETRY_DELAY_SECONDS * (2 ** attempt)
-                    self.stdout.write(self.style.WARNING(f"  Aviso: Erro {status_code} da API para URL: {url}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos..."))
-                    self.warnings_count += 1
+                    self.add_warning(f"{error_msg}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos...")
                     time.sleep(delay)
                 else:
+                    self.add_warning(f"Falha na busca da API após retries para {url}: {error_msg}")
                     return {"error_status": status_code,
                             "error_url": url,
                             "error_message": str(e)}
-            return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
+        self.add_warning(f"Falha na busca da API para {url}: Máximo de retries excedido.")
+        return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
-    def build_pit_instance(self, pit_data_dict): # <--- Método ajustado
-        # --- CORREÇÃO AQUI: Tratar lap_number=None para 0 ---
-        lap_number = pit_data_dict.get('lap_number', 0) # <--- Usar .get() com valor padrão 0
-        if pit_data_dict.get('lap_number') is None: # Verifica se o valor ORIGINAL era None
-            self.warnings_count += 1 # Conta como aviso se lap_number era null
-        # ----------------------------------------------------
+    def process_pit_entry(self, pit_data_dict, mode):
+        try:
+            lap_number = pit_data_dict.get('lap_number')
+            if lap_number is None:
+                lap_number = 0
+                self.add_warning(f"lap_number é None para pit stop (Mtg {pit_data_dict.get('meeting_key', 'N/A')}, Sess {pit_data_dict.get('session_key', 'N/A')}, Driver {pit_data_dict.get('driver_number', 'N/A')}). Usando 0.")
 
-        session_key = pit_data_dict.get('session_key')
-        meeting_key = pit_data_dict.get('meeting_key')
-        driver_number = pit_data_dict.get('driver_number')
-        
-        date_str = pit_data_dict.get('date')
-        pit_duration = pit_data_dict.get('pit_duration')
-        
-        if any(val is None for val in [session_key, meeting_key, driver_number, lap_number]):
-            missing_fields = [k for k,v in {'session_key': session_key, 'meeting_key': meeting_key, 'driver_number': driver_number, 'lap_number': lap_number}.items() if v is None]
-            raise ValueError(f"Dados incompletos para Pit: faltam {missing_fields}. Dados: {pit_data_dict}")
+            session_key = pit_data_dict.get('session_key')
+            meeting_key = pit_data_dict.get('meeting_key')
+            driver_number = pit_data_dict.get('driver_number')
+            
+            date_str = pit_data_dict.get('date')
+            pit_duration = pit_data_dict.get('pit_duration')
+            
+            if any(val is None for val in [session_key, meeting_key, driver_number, lap_number, date_str]):
+                missing_fields = [k for k,v in {'session_key': session_key, 'meeting_key': meeting_key, 'driver_number': driver_number, 'lap_number': lap_number, 'date': date_str}.items() if v is None]
+                return 'skipped_missing_data'
 
-        date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00')) if date_str else None
+            date_obj = None
+            if date_str:
+                try:
+                    date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                except ValueError:
+                    self.add_warning(f"Formato de data inválido '{date_str}' para pit stop (Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}, Lap {lap_number}).")
+                    return 'skipped_invalid_date'
 
-        pit_duration_parsed = None
-        if pit_duration is not None:
-            try:
-                pit_duration_parsed = float(str(pit_duration).replace(',', '.').strip())
-            except ValueError:
-                self.stdout.write(self.style.WARNING(f"Aviso: Valor de 'pit_duration' '{pit_duration}' não é numérico. Ignorando para Sess {session_key}, Driver {driver_number}, Lap {lap_number}."))
-                self.warnings_count += 1
-                pit_duration_parsed = None
+            pit_duration_parsed = None
+            if pit_duration is not None:
+                try:
+                    pit_duration_parsed = float(str(pit_duration).replace(',', '.').strip())
+                except ValueError:
+                    self.add_warning(f"Valor de 'pit_duration' '{pit_duration}' não é numérico. Ignorando para Sess {session_key}, Driver {driver_number}, Lap {lap_number}.")
+                    pit_duration_parsed = None
 
-        return Pit(
-            session_key=session_key,
-            meeting_key=meeting_key,
-            driver_number=driver_number,
-            lap_number=lap_number,
-            date=date_obj,
-            pit_duration=pit_duration_parsed
-        )
+            defaults = {
+                'date': date_obj,
+                'pit_duration': pit_duration_parsed
+            }
+            
+            if mode == 'U':
+                obj, created = Pit.objects.update_or_create(
+                    session_key=session_key,
+                    meeting_key=meeting_key,
+                    driver_number=driver_number,
+                    lap_number=lap_number,
+                    date=date_obj,
+                    defaults={
+                        'pit_duration': pit_duration_parsed
+                    }
+                )
+                return 'inserted' if created else 'updated'
+            else:
+                if Pit.objects.filter(
+                    session_key=session_key,
+                    meeting_key=meeting_key,
+                    driver_number=driver_number,
+                    lap_number=lap_number,
+                    date=date_obj
+                ).exists():
+                    return 'skipped'
+                
+                Pit.objects.create(
+                    session_key=session_key,
+                    meeting_key=meeting_key,
+                    driver_number=driver_number,
+                    lap_number=lap_number,
+                    date=date_obj,
+                    pit_duration=pit_duration_parsed
+                )
+                return 'inserted'
+
+        except IntegrityError:
+            return 'skipped'
+        except Exception as e:
+            data_debug = f"Mtg {pit_data_dict.get('meeting_key', 'N/A')}, Sess {pit_data_dict.get('session_key', 'N/A')}, Driver {pit_data_dict.get('driver_number', 'N/A')}, Lap {pit_data_dict.get('lap_number', 'N/A')}"
+            self.stdout.write(self.style.ERROR(f"Erro FATAL ao processar registro de pit stop ({data_debug}): {e} - Dados API: {pit_data_dict}"))
+            raise
+
 
     def handle(self, *args, **options):
         load_dotenv(dotenv_path=ENV_FILE_PATH)
 
         self.warnings_count = 0
+        self.all_warnings_details = []
+
+        meeting_key_param = options.get('meeting_key')
+        mode_param = options.get('mode', 'I')
 
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
-        
-        if use_api_token_flag:
-            try:
-                update_api_token_if_needed()
-            except Exception as e:
-                raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}. Não é possível prosseguir com a importação.")
-        else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg). Buscando dados históricos."))
 
-        self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Pit Stops (ORM)..."))
+        self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação/atualização de Pit Stops (ORM)..."))
+        self.stdout.write(f"Parâmetros recebidos: meeting_key={meeting_key_param if meeting_key_param else 'Nenhum'}, mode={mode_param}")
 
+        pit_stops_found_api_total = 0
         pit_stops_inserted_db = 0
+        pit_stops_updated_db = 0
         pit_stops_skipped_db = 0
-        total_race_session_driver_triplets_eligible = 0 
-        sessions_api_calls_processed_count = 0 
-            
+        pit_stops_skipped_missing_data = 0
+        pit_stops_skipped_invalid_date = 0
+        api_call_errors = 0
+
+        sessions_api_calls_made = 0
+
         try:
-            all_race_session_driver_triplets = self.get_race_session_driver_triplets_to_process()
-            total_race_session_driver_triplets_eligible = len(all_race_session_driver_triplets)
-            
-            if not all_race_session_driver_triplets:
-                self.stdout.write(self.style.NOTICE("Nenhuma tripla (M,S,D) de sessões 'Race' encontrada para importar pit stops. Encerrando."))
+            if use_api_token_flag:
+                try:
+                    self.stdout.write("Verificando e atualizando o token da API, se necessário...")
+                    update_api_token_if_needed()
+                    # Recarrega as variáveis de ambiente após possível atualização
+                    load_dotenv(dotenv_path=ENV_FILE_PATH, override=True)
+                    current_api_token = os.getenv('OPENF1_API_TOKEN')
+                    if not current_api_token:
+                        raise CommandError("Token da API (OPENF1_API_TOKEN) não disponível após verificação/atualização. Não é possível prosseguir com importação autenticada.")
+                    self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
+                except Exception as e:
+                    self.stdout.write(self.style.ERROR(f"Falha ao verificar/atualizar o token da API: {e}. Prosseguindo sem usar o token da API."))
+                    use_api_token_flag = False
+
+            if not use_api_token_flag:
+                self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False ou falha na obtenção do token). Buscando dados sem autenticação."))
+
+            # Obter os pares (meeting_key, session_key) e drivers relevantes para buscar dados
+            # Agora, não filtra por session_type='Race'
+            relevant_session_driver_map = self.get_relevant_session_driver_pairs_to_fetch(
+                meeting_key_filter=meeting_key_param,
+                mode=mode_param
+            )
+
+            if not relevant_session_driver_map:
+                self.stdout.write(self.style.NOTICE("Nenhum par (meeting_key, session_key) com drivers elegíveis para buscar pit stops. Encerrando."))
                 return
 
-            self.stdout.write(self.style.SUCCESS(f"Total de {total_race_session_driver_triplets_eligible} triplas (M,S,D) de drivers de sessões 'Race' para processamento."))
-            
-            api_delay = self.API_DELAY_SECONDS 
+            unique_session_pairs_to_fetch_api = sorted(list(relevant_session_driver_map.keys()))
 
-            session_pairs_to_fetch_api = {}
-            for m_key, s_key, d_num in all_race_session_driver_triplets:
-                session_pairs_to_fetch_api.setdefault((m_key, s_key), set()).add(d_num)
-            
-            unique_session_pairs_to_fetch = sorted(list(session_pairs_to_fetch_api.keys()))
+            self.stdout.write(self.style.SUCCESS(f"Total de {len(unique_session_pairs_to_fetch_api)} pares (meeting_key, session_key) para buscar na API."))
 
-            for i, (meeting_key, session_key) in enumerate(unique_session_pairs_to_fetch):
-                self.stdout.write(f"Processando Sessão (Mtg {meeting_key}, Sess {session_key}) para dados de pit stops ({i+1}/{len(unique_session_pairs_to_fetch)})...")
-                sessions_api_calls_processed_count += 1
-                current_session_pit_stops_objects = []
+            for i, (meeting_key, session_key) in enumerate(unique_session_pairs_to_fetch_api):
+                self.stdout.write(f"Buscando e processando pit stops para par {i+1}/{len(unique_session_pairs_to_fetch_api)}: Mtg {meeting_key}, Sess {session_key}...")
+                sessions_api_calls_made += 1
+
+                pit_data_from_api = self.fetch_pit_stops_data(session_key=session_key, use_token=use_api_token_flag)
+
+                if isinstance(pit_data_from_api, dict) and "error_status" in pit_data_from_api:
+                    api_call_errors += 1
+                    self.add_warning(f"Erro na API para Mtg {meeting_key}, Sess {session_key}: {pit_data_from_api['error_message']}")
+                    continue
+
+                if not pit_data_from_api:
+                    self.stdout.write(self.style.WARNING(f"Nenhum registro de pit stops encontrado na API para Mtg {meeting_key}, Sess {session_key}."))
+                    continue
+
+                pit_stops_found_api_total += len(pit_data_from_api)
+                self.stdout.write(f"Encontrados {len(pit_data_from_api)} registros de pit stops para Mtg {meeting_key}, Sess {session_key}. Processando...")
+
+                relevant_drivers_for_current_session = relevant_session_driver_map.get((meeting_key, session_key), set())
                 
-                try: 
-                    pit_data_from_api = self.fetch_pit_stops_data(session_key=session_key, use_token=use_api_token_flag)
-                    
-                    if isinstance(pit_data_from_api, dict) and "error_status" in pit_data_from_api:
-                        self.stdout.write(self.style.ERROR(f"  Erro na API para Sess {session_key}, Mtg {meeting_key}: {pit_data_from_api['error_message']}. Pulando esta sessão."))
-                        self.warnings_count += 1
-                        continue 
+                if mode_param == 'U':
+                    with transaction.atomic():
+                        Pit.objects.filter(
+                            meeting_key=meeting_key,
+                            session_key=session_key
+                        ).delete()
+                        self.stdout.write(f"Registros de pit stops existentes deletados para Mtg {meeting_key}, Sess {session_key}.")
 
-                    if not pit_data_from_api:
-                        self.stdout.write(self.style.WARNING(f"  Aviso: Nenhuma entrada de pit stops encontrada na API para Sess {session_key}, Mtg {meeting_key}."))
-                        self.warnings_count += 1
-                        continue
+                for pit_entry_dict in pit_data_from_api:
+                    driver_num_from_api = pit_entry_dict.get('driver_number')
+                    if driver_num_from_api and driver_num_from_api in relevant_drivers_for_current_session:
+                        try:
+                            result = self.process_pit_entry(pit_entry_dict, mode=mode_param)
+                            if result == 'inserted':
+                                pit_stops_inserted_db += 1
+                            elif result == 'updated':
+                                pit_stops_updated_db += 1
+                            elif result == 'skipped':
+                                pit_stops_skipped_db += 1
+                            elif result == 'skipped_missing_data':
+                                pit_stops_skipped_missing_data += 1
+                                self.add_warning(f"Pit Stop ignorado: dados obrigatórios ausentes para Mtg {pit_entry_dict.get('meeting_key', 'N/A')}, Sess {pit_entry_dict.get('session_key', 'N/A')}, Driver {pit_entry_dict.get('driver_number', 'N/A')}, Lap {pit_entry_dict.get('lap_number', 'N/A')}.")
+                            elif result == 'skipped_invalid_date':
+                                pit_stops_skipped_invalid_date += 1
+                        except Exception as pit_process_e:
+                            self.add_warning(f"Erro ao processar UM REGISTRO de pit stop (Mtg {pit_entry_dict.get('meeting_key', 'N/A')}, Sess {pit_entry_dict.get('session_key', 'N/A')}, Driver {pit_entry_dict.get('driver_number', 'N/A')}, Lap {pit_entry_dict.get('lap_number', 'N/A')}): {pit_process_e}. Pulando para o próximo.")
                     
-                    self.stdout.write(f"  Encontrados {len(pit_data_from_api)} registros para Sess {session_key}. Filtrando por driver e construindo...")
+                if self.API_DELAY_SECONDS > 0:
+                    time.sleep(self.API_DELAY_SECONDS)
 
-                    relevant_drivers_for_current_session_set = session_pairs_to_fetch_api.get((meeting_key, session_key), set())
-                    
-                    for pit_entry_dict in pit_data_from_api:
-                        driver_num_from_api = pit_entry_dict.get('driver_number')
-                        if driver_num_from_api in relevant_drivers_for_current_session_set: # Filtra drivers aqui
-                            try:
-                                pit_instance = self.build_pit_instance(pit_entry_dict)
-                                if pit_instance is not None:
-                                    current_session_pit_stops_objects.append(pit_instance)
-                            except Exception as build_e:
-                                self.stdout.write(self.style.ERROR(f"Erro ao construir instância de pit stops (Sess {session_key}, Driver {driver_num_from_api}): {build_e}. Pulando este registro."))
-                                self.warnings_count += 1
-                            
-                        if current_session_pit_stops_objects:
-                            with transaction.atomic():
-                                created_instances = Pit.objects.bulk_create(current_session_pit_stops_objects, batch_size=self.BULK_SIZE, ignore_conflicts=True)
-                                pit_stops_inserted_db += len(created_instances)
-                                pit_stops_skipped_db += (len(current_session_pit_stops_objects) - len(created_instances))
-                                self.stdout.write(self.style.SUCCESS(f"  {len(created_instances)} registros inseridos (total para esta sessão)."))
-                            
-                        else:
-                            self.stdout.write(self.style.WARNING(f"  Aviso: Nenhuma entrada de pit stops válida encontrada para inserção para Sess {session_key}, Mtg {meeting_key} (após filtragem de driver)."))
-                            self.warnings_count += 1
-
-                        if api_delay > 0:
-                            time.sleep(api_delay)
-
-                except Exception as session_overall_e: # Captura erros gerais de processamento da SESSÃO
-                    self.stdout.write(self.style.ERROR(f"Erro ao processar Sessão (Mtg {meeting_key}, Sess {session_key}): {session_overall_e}. Esta sessão não foi processada por completo. Pulando para a próxima sessão."))
-                    self.warnings_count += 1
-                    
-            self.stdout.write(self.style.SUCCESS("Importação de Pit Stops concluída com sucesso para todas as sessões e drivers elegíveis!"))
+            self.stdout.write(self.style.SUCCESS("Processamento de Pit Stops concluído!"))
 
         except OperationalError as e:
             raise CommandError(f"Erro operacional de banco de dados durante a importação (ORM): {e}")
         except Exception as e:
             raise CommandError(f"Erro inesperado durante a importação de Pit Stops (ORM): {e}")
         finally:
-            self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo da Importação de Pit Stops (ORM) ---"))
-            self.stdout.write(self.style.SUCCESS(f"Triplas (meeting_key, session_key, driver_number) de drivers de Race elegíveis: {total_race_session_driver_triplets_eligible}")) 
-            self.stdout.write(self.style.SUCCESS(f"Sessões (meeting_key, session_key) com API processada: {sessions_api_calls_processed_count}")) 
-            self.stdout.write(self.style.SUCCESS(f"Registros inseridos no DB: {pit_stops_inserted_db}"))
-            self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB): {pit_stops_skipped_db}"))
+            self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo do Processamento de Pit Stops (ORM) ---"))
+            self.stdout.write(self.style.SUCCESS(f"Pares (M,S) únicos para busca na API: {len(unique_session_pairs_to_fetch_api) if 'unique_session_pairs_to_fetch_api' in locals() else 0}"))
+            self.stdout.write(self.style.SUCCESS(f"Chamadas à API de Pit Stops realizadas: {sessions_api_calls_made}"))
+            self.stdout.write(self.style.SUCCESS(f"Registros de Pit Stops encontrados na API (total): {pit_stops_found_api_total}"))
+            self.stdout.write(self.style.SUCCESS(f"Registros novos inseridos no DB: {pit_stops_inserted_db}"))
+            self.stdout.write(self.style.SUCCESS(f"Registros existentes atualizados no DB: {pit_stops_updated_db}"))
+            self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB em modo 'I'): {pit_stops_skipped_db}"))
+            if pit_stops_skipped_missing_data > 0:
+                self.stdout.write(self.style.WARNING(f"Registros ignorados (dados obrigatórios ausentes): {pit_stops_skipped_missing_data}"))
+            if pit_stops_skipped_invalid_date > 0:
+                self.stdout.write(self.style.WARNING(f"Registros ignorados (formato de data inválido): {pit_stops_skipped_invalid_date}"))
+            if api_call_errors > 0:
+                self.stdout.write(self.style.ERROR(f"Erros em chamadas à API: {api_call_errors}"))
             self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
+            if self.all_warnings_details:
+                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+                for warn_msg in self.all_warnings_details:
+                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
             self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
-            self.stdout.write(self.style.SUCCESS("Importação de pit stops finalizada!"))
+            self.stdout.write(self.style.SUCCESS("Processamento de pit stops finalizado!"))
