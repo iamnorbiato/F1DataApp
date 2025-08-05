@@ -10,10 +10,10 @@ from django.db import connection, OperationalError, IntegrityError, transaction
 from django.conf import settings
 
 # Importa os modelos necessários
-from core.models import Drivers, Sessions, Pit, Meetings # Adicionado Meetings para obter todos os meeting_keys, se necessário
+from core.models import Drivers, Sessions, Pit, Meetings 
 from dotenv import load_dotenv
 from update_token import update_api_token_if_needed
-import pytz # Para manipulação de fusos horários
+import pytz 
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -27,15 +27,13 @@ class Command(BaseCommand):
     API_RETRY_DELAY_SECONDS = 5
     BULK_SIZE = 5000
 
-    # Contadores e lista de avisos serão inicializados no handle() para cada execução.
-
     def add_arguments(self, parser):
         parser.add_argument('--meeting_key', type=int, help='Especifica um Meeting Key para filtrar a importação (opcional).')
-        parser.add_argument('--mode', choices=['I', 'U'], default='I',
-                            help='Modo de operação: I=Insert apenas (padrão), U=Update (atualiza existentes e insere novos).')
+        parser.add_argument('--session_key', type=int, help='Especifica um Session Key para filtrar a importação (opcional).') # Adicionado session_key
+        parser.add_argument('--mode', choices=['I', 'U'], default=None, # Alterado para None para controle automático no handle
+                            help='Modo de operação: I=Insert apenas, U=Update (atualiza existentes e insere novos).')
 
     def add_warning(self, message):
-        # Inicializa se não estiverem inicializados (para segurança, embora handle os inicialize)
         if not hasattr(self, 'warnings_count'):
             self.warnings_count = 0
             self.all_warnings_details = []
@@ -43,60 +41,82 @@ class Command(BaseCommand):
         self.all_warnings_details.append(message)
         self.stdout.write(self.style.WARNING(message))
 
-    def get_relevant_session_driver_pairs_to_fetch(self, meeting_key_filter=None, mode='I'):
+    # Esta função será modificada para se alinhar com a nova estratégia
+    def get_session_pairs_to_fetch(self, meeting_key_param=None, session_key_param=None, mode='I'):
         """
-        Identifica pares (meeting_key, session_key) de *todas* as sessões e associa a eles os driver_numbers relevantes.
-        Filtra por meeting_key e modo ('I' para apenas novos, 'U' para todos relevantes).
-        Retorna um dicionário: {(m_key, s_key): {driver_number_1, driver_number_2, ...}}
+        Identifica os pares (meeting_key, session_key) a serem processados.
+        Modo 'I' (descoberta): Pega meetings sem pits.
+        Modo 'U' (direcionado): Pega meetings/sessions especificados.
+        Retorna uma lista de tuplas (meeting_key, session_key) únicas.
         """
-        self.stdout.write(self.style.MIGRATE_HEADING("Identificando pares (meeting_key, session_key) e drivers relevantes para 'Pit'..."))
+        self.stdout.write(self.style.MIGRATE_HEADING("Identificando pares (meeting_key, session_key) para buscar 'Pit'..."))
 
-        # Obter *todas* as sessões (removido o filtro session_type='Race')
-        sessions_query = Sessions.objects.all()
-        if meeting_key_filter:
-            sessions_query = sessions_query.filter(meeting_key=meeting_key_filter)
+        session_pairs = []
 
-        all_sessions = set(sessions_query.values_list('meeting_key', 'session_key'))
-        self.stdout.write(f"Encontrados {len(all_sessions)} pares (meeting_key, session_key) para todas as sessões{' para o meeting_key especificado' if meeting_key_filter else ''}.")
+        if meeting_key_param is None and session_key_param is None:
+            # Modo de descoberta (mode='I')
+            all_meeting_keys = set(Meetings.objects.values_list('meeting_key', flat=True).distinct())
+            existing_pit_meeting_keys = set(Pit.objects.values_list('meeting_key', flat=True).distinct())
+            meetings_to_discover = sorted(list(all_meeting_keys - existing_pit_meeting_keys))
 
-        # Obter todas as triplas de drivers para as sessões relevantes
-        relevant_driver_triplets = set(
-            Drivers.objects.filter(
-                meeting_key__in=[pair[0] for pair in all_sessions],
-                session_key__in=[pair[1] for pair in all_sessions]
-            ).values_list('meeting_key', 'session_key', 'driver_number')
-        )
-        self.stdout.write(f"Encontradas {len(relevant_driver_triplets)} triplas de drivers relevantes para todas as sessões.")
+            if not meetings_to_discover:
+                self.stdout.write(self.style.NOTICE("Nenhum Meeting novo encontrado para buscar dados de Pit. Encerrando."))
+                return []
 
-        final_pairs_drivers_map = {}
+            for m_key in meetings_to_discover:
+                s_keys_for_meeting = Sessions.objects.filter(meeting_key=m_key).values_list('session_key', flat=True).distinct()
+                for s_key in s_keys_for_meeting:
+                    session_pairs.append((m_key, s_key))
+            
+            self.stdout.write(f"Modo de Descoberta: Encontrados {len(session_pairs)} pares (M,S) para buscar Pit Stops.")
 
-        if mode == 'I':
-            # Para 'I', precisamos subtrair o que já existe em Pit (considerando M,S,D)
-            existing_pit_msd_triplets = set(
-                Pit.objects.filter(
-                    meeting_key__in=[pair[0] for pair in all_sessions],
-                    session_key__in=[pair[1] for pair in all_sessions]
-                ).values_list('meeting_key', 'session_key', 'driver_number')
-            )
-            drivers_to_consider_for_fetch = relevant_driver_triplets - existing_pit_msd_triplets
-            self.stdout.write(f"Modo 'I': {len(drivers_to_consider_for_fetch)} triplas de drivers/sessões serão consideradas para busca de novos pit stops.")
-        else: # mode == 'U'
-            drivers_to_consider_for_fetch = relevant_driver_triplets
-            self.stdout.write(f"Modo 'U': Todas as {len(drivers_to_consider_for_fetch)} triplas de drivers/sessões relevantes serão consideradas para atualização/inserção.")
-
-        # Organiza por (meeting_key, session_key) para chamadas de API
-        for m_key, s_key, d_num in drivers_to_consider_for_fetch:
-            final_pairs_drivers_map.setdefault((m_key, s_key), set()).add(d_num)
+        else:
+            # Modo direcionado (mode='U' por padrão)
+            if session_key_param is not None:
+                # Se session_key é especificado, pega apenas esse par
+                if meeting_key_param:
+                    # Se meeting_key também foi passado, valida se o par existe
+                    if Sessions.objects.filter(meeting_key=meeting_key_param, session_key=session_key_param).exists():
+                         session_pairs.append((meeting_key_param, session_key_param))
+                    else:
+                        self.add_warning(f"Aviso: Par (Mtg {meeting_key_param}, Sess {session_key_param}) não encontrado na tabela Sessions. Nenhuma busca será feita.")
+                else:
+                    # Se apenas session_key, tenta encontrar o meeting_key associado
+                    session_obj = Sessions.objects.filter(session_key=session_key_param).first()
+                    if session_obj:
+                        session_pairs.append((session_obj.meeting_key, session_key_param))
+                    else:
+                        self.add_warning(f"Aviso: Session Key {session_key_param} não encontrado na tabela Sessions. Nenhuma busca será feita.")
+            elif meeting_key_param is not None:
+                # Se apenas meeting_key é especificado, pega todas as sessões desse meeting
+                s_keys_for_meeting = Sessions.objects.filter(meeting_key=meeting_key_param).values_list('session_key', flat=True).distinct()
+                for s_key in s_keys_for_meeting:
+                    session_pairs.append((meeting_key_param, s_key))
+                self.stdout.write(f"Modo Direcionado: Encontrados {len(session_pairs)} pares (M,S) para o Meeting {meeting_key_param}.")
+            
+            if not session_pairs:
+                self.stdout.write(self.style.WARNING("Nenhum par (M,S) válido para o modo direcionado com os parâmetros fornecidos. Encerrando."))
         
-        self.stdout.write(self.style.SUCCESS(f"Identificados {len(final_pairs_drivers_map)} pares (M,S) únicos para buscar dados de 'Pit' na API."))
-        return final_pairs_drivers_map
+        return sorted(list(set(session_pairs))) # Retorna uma lista de tuplas únicas e ordenadas
 
 
-    def fetch_pit_stops_data(self, session_key, use_token=True):
-        if not session_key:
-            raise CommandError("session_key deve ser fornecido para buscar dados de pit stops da API.")
+    # fetch_pit_stops_data agora aceita meeting_key e session_key e não exige driver_number
+    def fetch_pit_stops_data(self, meeting_key=None, session_key=None, use_token=True):
+        """
+        Busca dados de pit stops da API OpenF1 com base nos parâmetros fornecidos.
+        Aceita meeting_key e/ou session_key.
+        """
+        params = {}
+        if meeting_key is not None:
+            params['meeting_key'] = meeting_key
+        if session_key is not None:
+            params['session_key'] = session_key
+        
+        if not params:
+            raise CommandError("Pelo menos 'meeting_key' ou 'session_key' devem ser fornecidos para fetch_pit_stops_data.")
 
-        url = f"{self.API_URL}?session_key={session_key}"
+        url = f"{self.API_URL}?" + "&".join([f"{k}={v}" for k,v in params.items()])
+        self.stdout.write(f"  Chamando API Pit com URL: {url}") # Loga a URL exata que será chamada
 
         headers = {"Accept": "application/json"}
 
@@ -116,77 +136,78 @@ class Command(BaseCommand):
                 return response.json()
             except requests.exceptions.RequestException as e:
                 status_code = getattr(response, 'status_code', 'Unknown')
-                error_msg = f"Erro {status_code} da API para URL: {url} - {e}"
-                if status_code in [500, 502, 503, 504, 401, 403] and attempt < self.API_MAX_RETRIES - 1:
+                error_url = response.url if hasattr(response, 'url') else url
+                error_msg = f"Erro {status_code} da API para URL: {error_url} - {e}"
+                if status_code in [500, 502, 503, 504, 401, 403, 422] and attempt < self.API_MAX_RETRIES - 1:
                     delay = self.API_RETRY_DELAY_SECONDS * (2 ** attempt)
-                    self.add_warning(f"{error_msg}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos...")
+                    self.add_warning(f"  {error_msg}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos...")
                     time.sleep(delay)
                 else:
-                    self.add_warning(f"Falha na busca da API após retries para {url}: {error_msg}")
+                    self.add_warning(f"Falha na busca da API após retries para {error_url}: {error_msg}")
                     return {"error_status": status_code,
-                            "error_url": url,
+                            "error_url": error_url,
                             "error_message": str(e)}
         self.add_warning(f"Falha na busca da API para {url}: Máximo de retries excedido.")
         return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
     def process_pit_entry(self, pit_data_dict, mode):
+        # REMOVIDO: def to_datetime(val) não é mais necessária aqui
+        
+        meeting_key = pit_data_dict.get("meeting_key")
+        session_key = pit_data_dict.get("session_key")
+        driver_number = pit_data_dict.get("driver_number")
+        lap_number = pit_data_dict.get('lap_number')
+        date_str = pit_data_dict.get('date') # O dado da API é usado diretamente como string
+
+        if lap_number is None:
+            lap_number = 0
+
+        # === VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS PARA PK ===
+        # Valida apenas os campos que NUNCA devem ser None para uma PK de Pit Stop
+        # Assumindo que meeting_key, session_key, driver_number, lap_number e date SÃO SEMPRE NECESSÁRIOS
+        if any(val is None for val in [meeting_key, session_key, driver_number, lap_number, date_str]):
+            missing_fields = [k for k,v in {'session_key': session_key, 'meeting_key': meeting_key, 'driver_number': driver_number, 'lap_number': lap_number, 'date': date_str}.items() if v is None]
+            self.add_warning(f"Pit Stop ignorado: dados obrigatórios da PK ausentes. Faltando: {missing_fields}. Dados API: {pit_data_dict}")
+            return 'skipped_missing_data'
+
+        # REMOVIDO: Validação de formato de data, já que a string é usada crua
+        # if date_str:
+        #    try: ...
+        #    except ValueError: ...
+
+        pit_duration = pit_data_dict.get('pit_duration') # Pode ser string, float ou None da API
+        pit_duration_parsed = None
+        if pit_duration is not None:
+            try:
+                # Tenta converter para float, substituindo vírgulas por pontos se necessário
+                pit_duration_parsed = float(str(pit_duration).replace(',', '.').strip())
+            except ValueError:
+                self.add_warning(f"Valor de 'pit_duration' '{pit_duration}' não é numérico. Ignorando para Sess {session_key}, Driver {driver_number}, Lap {lap_number}. Usando None.")
+                pit_duration_parsed = None
+
+        defaults = {
+            'pit_duration': pit_duration_parsed
+        }
+        
         try:
-            lap_number = pit_data_dict.get('lap_number')
-            if lap_number is None:
-                lap_number = 0
-                self.add_warning(f"lap_number é None para pit stop (Mtg {pit_data_dict.get('meeting_key', 'N/A')}, Sess {pit_data_dict.get('session_key', 'N/A')}, Driver {pit_data_dict.get('driver_number', 'N/A')}). Usando 0.")
-
-            session_key = pit_data_dict.get('session_key')
-            meeting_key = pit_data_dict.get('meeting_key')
-            driver_number = pit_data_dict.get('driver_number')
-            
-            date_str = pit_data_dict.get('date')
-            pit_duration = pit_data_dict.get('pit_duration')
-            
-            if any(val is None for val in [session_key, meeting_key, driver_number, lap_number, date_str]):
-                missing_fields = [k for k,v in {'session_key': session_key, 'meeting_key': meeting_key, 'driver_number': driver_number, 'lap_number': lap_number, 'date': date_str}.items() if v is None]
-                return 'skipped_missing_data'
-
-            date_obj = None
-            if date_str:
-                try:
-                    date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                except ValueError:
-                    self.add_warning(f"Formato de data inválido '{date_str}' para pit stop (Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}, Lap {lap_number}).")
-                    return 'skipped_invalid_date'
-
-            pit_duration_parsed = None
-            if pit_duration is not None:
-                try:
-                    pit_duration_parsed = float(str(pit_duration).replace(',', '.').strip())
-                except ValueError:
-                    self.add_warning(f"Valor de 'pit_duration' '{pit_duration}' não é numérico. Ignorando para Sess {session_key}, Driver {driver_number}, Lap {lap_number}.")
-                    pit_duration_parsed = None
-
-            defaults = {
-                'date': date_obj,
-                'pit_duration': pit_duration_parsed
-            }
-            
             if mode == 'U':
                 obj, created = Pit.objects.update_or_create(
                     session_key=session_key,
                     meeting_key=meeting_key,
                     driver_number=driver_number,
                     lap_number=lap_number,
-                    date=date_obj,
-                    defaults={
-                        'pit_duration': pit_duration_parsed
-                    }
+                    date=date_str, # Usando a string bruta
+                    defaults=defaults
                 )
                 return 'inserted' if created else 'updated'
-            else:
+            else: # mode == 'I'
+                # Para Insert-only, verifica se já existe antes de criar para evitar IntegrityError
                 if Pit.objects.filter(
                     session_key=session_key,
                     meeting_key=meeting_key,
                     driver_number=driver_number,
                     lap_number=lap_number,
-                    date=date_obj
+                    date=date_str # Usando a string bruta
                 ).exists():
                     return 'skipped'
                 
@@ -195,12 +216,13 @@ class Command(BaseCommand):
                     meeting_key=meeting_key,
                     driver_number=driver_number,
                     lap_number=lap_number,
-                    date=date_obj,
+                    date=date_str, # Usando a string bruta
                     pit_duration=pit_duration_parsed
                 )
                 return 'inserted'
 
-        except IntegrityError:
+        except IntegrityError as ie: # Captura IntegrityError para logs mais claros
+            self.add_warning(f"IntegrityError ao processar pit stop (Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}, Lap {lap_number}, Date {date_str}). Erro: {ie}. Provavelmente duplicata. Ignorando.")
             return 'skipped'
         except Exception as e:
             data_debug = f"Mtg {pit_data_dict.get('meeting_key', 'N/A')}, Sess {pit_data_dict.get('session_key', 'N/A')}, Driver {pit_data_dict.get('driver_number', 'N/A')}, Lap {pit_data_dict.get('lap_number', 'N/A')}"
@@ -215,12 +237,13 @@ class Command(BaseCommand):
         self.all_warnings_details = []
 
         meeting_key_param = options.get('meeting_key')
-        mode_param = options.get('mode', 'I')
+        session_key_param = options.get('session_key') # NOVO: Captura o session_key
+        mode_param = options.get('mode') # Não define default aqui
 
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
 
         self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação/atualização de Pit Stops (ORM)..."))
-        self.stdout.write(f"Parâmetros recebidos: meeting_key={meeting_key_param if meeting_key_param else 'Nenhum'}, mode={mode_param}")
+        self.stdout.write(f"Parâmetros recebidos: meeting_key={meeting_key_param if meeting_key_param else 'Nenhum'}, session_key={session_key_param if session_key_param else 'Nenhum'}, mode={mode_param if mode_param else 'Automático'}")
 
         pit_stops_found_api_total = 0
         pit_stops_inserted_db = 0
@@ -230,14 +253,66 @@ class Command(BaseCommand):
         pit_stops_skipped_invalid_date = 0
         api_call_errors = 0
 
-        sessions_api_calls_made = 0
+        sessions_api_calls_made = 0 # Contagem de chamadas API, não de sessões processadas
+
+        # === Lógica de Determinação do Modo e API Calls ===
+        api_calls_info = [] # Lista de dicionários de parâmetros para fetch_pit_stops_data
+        
+        actual_mode = 'I' # Default inicial é Insert Only
+        if meeting_key_param is not None or session_key_param is not None:
+            # Se algum parâmetro de filtro é passado, o modo padrão é 'U' (Upsert)
+            actual_mode = 'U'
+
+        # O parâmetro --mode na linha de comando sempre sobrescreve o modo automático
+        if mode_param is not None:
+            actual_mode = mode_param
+        
+        self.stdout.write(self.style.NOTICE(f"Modo de operação FINAL: '{actual_mode}'."))
+
+
+        if meeting_key_param is None and session_key_param is None:
+            # MODO 1: Descoberta de Novos Meetings para Pit Stops
+            self.stdout.write(self.style.NOTICE("Modo AUTOMÁTICO: Descoberta de Novos Meetings (sem parâmetros de filtro)."))
+            
+            meetings_to_discover = self.get_session_pairs_to_fetch(mode=actual_mode) # Esta função já filtra para o modo I
+
+            if not meetings_to_discover:
+                self.stdout.write(self.style.NOTICE("Nenhum Meeting novo/elegível encontrado para buscar dados de Pit. Encerrando."))
+                return
+            
+            # Para o modo de descoberta, a API é chamada por (M,S)
+            for m_key, s_key in meetings_to_discover:
+                api_calls_info.append({'meeting_key': m_key, 'session_key': s_key})
+
+        else:
+            # MODO 2: Importação Direcionada
+            self.stdout.write(self.style.NOTICE("Modo AUTOMÁTICO: Importação Direcionada (com parâmetros de filtro)."))
+
+            # Construir os parâmetros para a ÚNICA chamada API, conforme instruído
+            call_params = {}
+            if meeting_key_param is not None:
+                call_params['meeting_key'] = meeting_key_param
+            if session_key_param is not None:
+                call_params['session_key'] = session_key_param
+            
+            if not call_params: # Deveria ser impossível aqui se meeting_key_param ou session_key_param não são None
+                self.stdout.write(self.style.WARNING("Nenhum parâmetro válido para o modo direcionado. Encerrando."))
+                return
+
+            api_calls_info.append(call_params) # APENAS UMA CHAMADA API (ou poucas, se a API for flexível)
+            
+            if not api_calls_info:
+                self.stdout.write(self.style.WARNING("Nenhum parâmetro válido (meeting_key ou session_key) fornecido para o modo direcionado. Encerrando."))
+                return
+
+
+        self.stdout.write(self.style.SUCCESS(f"Total de {len(api_calls_info)} chamadas de API de Pit Stops a serem feitas."))
 
         try:
             if use_api_token_flag:
                 try:
                     self.stdout.write("Verificando e atualizando o token da API, se necessário...")
                     update_api_token_if_needed()
-                    # Recarrega as variáveis de ambiente após possível atualização
                     load_dotenv(dotenv_path=ENV_FILE_PATH, override=True)
                     current_api_token = os.getenv('OPENF1_API_TOKEN')
                     if not current_api_token:
@@ -249,68 +324,77 @@ class Command(BaseCommand):
 
             if not use_api_token_flag:
                 self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False ou falha na obtenção do token). Buscando dados sem autenticação."))
+            
+            # Não precisamos mais do set deleted_msd_for_update_mode aqui,
+            # pois a lógica de deleção no modo U foi simplificada para deletar tudo
+            # da sessão/meeting da chamada API.
 
-            # Obter os pares (meeting_key, session_key) e drivers relevantes para buscar dados
-            # Agora, não filtra por session_type='Race'
-            relevant_session_driver_map = self.get_relevant_session_driver_pairs_to_fetch(
-                meeting_key_filter=meeting_key_param,
-                mode=mode_param
-            )
+            for i, call_params in enumerate(api_calls_info):
+                current_m_key_for_log = call_params.get('meeting_key', 'N/A')
+                current_s_key_for_log = call_params.get('session_key', 'N/A')
 
-            if not relevant_session_driver_map:
-                self.stdout.write(self.style.NOTICE("Nenhum par (meeting_key, session_key) com drivers elegíveis para buscar pit stops. Encerrando."))
-                return
-
-            unique_session_pairs_to_fetch_api = sorted(list(relevant_session_driver_map.keys()))
-
-            self.stdout.write(self.style.SUCCESS(f"Total de {len(unique_session_pairs_to_fetch_api)} pares (meeting_key, session_key) para buscar na API."))
-
-            for i, (meeting_key, session_key) in enumerate(unique_session_pairs_to_fetch_api):
-                self.stdout.write(f"Buscando e processando pit stops para par {i+1}/{len(unique_session_pairs_to_fetch_api)}: Mtg {meeting_key}, Sess {session_key}...")
+                self.stdout.write(f"Buscando e processando pit stops para chamada {i+1}/{len(api_calls_info)}: Mtg {current_m_key_for_log}, Sess {current_s_key_for_log}...")
                 sessions_api_calls_made += 1
 
-                pit_data_from_api = self.fetch_pit_stops_data(session_key=session_key, use_token=use_api_token_flag)
+                pit_data_from_api = self.fetch_pit_stops_data(
+                    meeting_key=call_params.get('meeting_key'),
+                    session_key=call_params.get('session_key'),
+                    use_token=use_api_token_flag
+                )
 
                 if isinstance(pit_data_from_api, dict) and "error_status" in pit_data_from_api:
                     api_call_errors += 1
-                    self.add_warning(f"Erro na API para Mtg {meeting_key}, Sess {session_key}: {pit_data_from_api['error_message']}")
+                    self.add_warning(f"Erro na API para Mtg {current_m_key_for_log}, Sess {current_s_key_for_log}: {pit_data_from_api['error_message']}")
                     continue
 
                 if not pit_data_from_api:
-                    self.stdout.write(self.style.WARNING(f"Nenhum registro de pit stops encontrado na API para Mtg {meeting_key}, Sess {session_key}."))
+                    self.stdout.write(self.style.WARNING(f"Nenhum registro de pit stops encontrado na API para Mtg {current_m_key_for_log}, Sess {current_s_key_for_log}."))
                     continue
 
                 pit_stops_found_api_total += len(pit_data_from_api)
-                self.stdout.write(f"Encontrados {len(pit_data_from_api)} registros de pit stops para Mtg {meeting_key}, Sess {session_key}. Processando...")
+                self.stdout.write(f"Encontrados {len(pit_data_from_api)} registros de pit stops para Mtg {current_m_key_for_log}, Sess {current_s_key_for_log}. Processando...")
 
-                relevant_drivers_for_current_session = relevant_session_driver_map.get((meeting_key, session_key), set())
-                
-                if mode_param == 'U':
+                # No modo 'U', a melhor estratégia para 'pit' é deletar todos os pit stops existentes
+                # para o MEETING/SESSION que foi buscado na API e depois inserir os novos.
+                if actual_mode == 'U':
                     with transaction.atomic():
-                        Pit.objects.filter(
-                            meeting_key=meeting_key,
-                            session_key=session_key
-                        ).delete()
-                        self.stdout.write(f"Registros de pit stops existentes deletados para Mtg {meeting_key}, Sess {session_key}.")
+                        # Lógica de deleção baseada nos parâmetros da chamada API
+                        delete_filter_kwargs = {}
+                        if call_params.get('meeting_key') is not None:
+                            delete_filter_kwargs['meeting_key'] = call_params['meeting_key']
+                        if call_params.get('session_key') is not None:
+                            delete_filter_kwargs['session_key'] = call_params['session_key']
+                        
+                        if delete_filter_kwargs: # Só deleta se houver algum filtro
+                            Pit.objects.filter(**delete_filter_kwargs).delete()
+                            self.stdout.write(f"Registros de pit stops existentes deletados para {delete_filter_kwargs}.")
+                        else:
+                            self.add_warning("Aviso: Modo U ativado, mas nenhum filtro (meeting_key ou session_key) para deletar. Não deletando registros.")
 
                 for pit_entry_dict in pit_data_from_api:
-                    driver_num_from_api = pit_entry_dict.get('driver_number')
-                    if driver_num_from_api and driver_num_from_api in relevant_drivers_for_current_session:
-                        try:
-                            result = self.process_pit_entry(pit_entry_dict, mode=mode_param)
-                            if result == 'inserted':
-                                pit_stops_inserted_db += 1
-                            elif result == 'updated':
-                                pit_stops_updated_db += 1
-                            elif result == 'skipped':
-                                pit_stops_skipped_db += 1
-                            elif result == 'skipped_missing_data':
-                                pit_stops_skipped_missing_data += 1
-                                self.add_warning(f"Pit Stop ignorado: dados obrigatórios ausentes para Mtg {pit_entry_dict.get('meeting_key', 'N/A')}, Sess {pit_entry_dict.get('session_key', 'N/A')}, Driver {pit_entry_dict.get('driver_number', 'N/A')}, Lap {pit_entry_dict.get('lap_number', 'N/A')}.")
-                            elif result == 'skipped_invalid_date':
-                                pit_stops_skipped_invalid_date += 1
-                        except Exception as pit_process_e:
-                            self.add_warning(f"Erro ao processar UM REGISTRO de pit stop (Mtg {pit_entry_dict.get('meeting_key', 'N/A')}, Sess {pit_entry_dict.get('session_key', 'N/A')}, Driver {pit_entry_dict.get('driver_number', 'N/A')}, Lap {pit_entry_dict.get('lap_number', 'N/A')}): {pit_process_e}. Pulando para o próximo.")
+                    # Filtra os dados recebidos da API pelo driver_number e outros campos,
+                    # se o modo 'I' exigir que a tripla (M,S,D) já tenha sido "descoberta".
+                    # No modo direcionado, processamos tudo que a API envia.
+                    
+                    # No caso de Pit, a PK é (M, S, D, Lap, Date). 
+                    # A API pode retornar pits para drivers que não estão na nossa tabela 'Drivers'.
+                    # Ou em modo I, pode retornar pits para drivers que já existem.
+                    # A lógica de process_pit_entry e exists() vai lidar com isso.
+                    try:
+                        result = self.process_pit_entry(pit_entry_dict, mode=actual_mode)
+                        if result == 'inserted':
+                            pit_stops_inserted_db += 1
+                        elif result == 'updated':
+                            pit_stops_updated_db += 1
+                        elif result == 'skipped':
+                            pit_stops_skipped_db += 1
+                        elif result == 'skipped_missing_data':
+                            pit_stops_skipped_missing_data += 1
+                            self.add_warning(f"Pit Stop ignorado: dados obrigatórios da PK ausentes. Dados API: {pit_entry_dict}")
+                        elif result == 'skipped_invalid_date':
+                            pit_stops_skipped_invalid_date += 1
+                    except Exception as pit_process_e:
+                        self.add_warning(f"Erro ao processar UM REGISTRO de pit stop: {pit_process_e}. Dados API: {pit_entry_dict}. Pulando para o próximo.")
                     
                 if self.API_DELAY_SECONDS > 0:
                     time.sleep(self.API_DELAY_SECONDS)
@@ -318,19 +402,18 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("Processamento de Pit Stops concluído!"))
 
         except OperationalError as e:
-            raise CommandError(f"Erro operacional de banco de dados durante a importação (ORM): {e}")
+            raise CommandError(f"Erro operacional de banco de dados durante a importação/atualização (ORM): {e}")
         except Exception as e:
             raise CommandError(f"Erro inesperado durante a importação de Pit Stops (ORM): {e}")
         finally:
             self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo do Processamento de Pit Stops (ORM) ---"))
-            self.stdout.write(self.style.SUCCESS(f"Pares (M,S) únicos para busca na API: {len(unique_session_pairs_to_fetch_api) if 'unique_session_pairs_to_fetch_api' in locals() else 0}"))
             self.stdout.write(self.style.SUCCESS(f"Chamadas à API de Pit Stops realizadas: {sessions_api_calls_made}"))
             self.stdout.write(self.style.SUCCESS(f"Registros de Pit Stops encontrados na API (total): {pit_stops_found_api_total}"))
             self.stdout.write(self.style.SUCCESS(f"Registros novos inseridos no DB: {pit_stops_inserted_db}"))
             self.stdout.write(self.style.SUCCESS(f"Registros existentes atualizados no DB: {pit_stops_updated_db}"))
             self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB em modo 'I'): {pit_stops_skipped_db}"))
             if pit_stops_skipped_missing_data > 0:
-                self.stdout.write(self.style.WARNING(f"Registros ignorados (dados obrigatórios ausentes): {pit_stops_skipped_missing_data}"))
+                self.stdout.write(self.style.WARNING(f"Registros ignorados (dados obrigatórios da PK ausentes): {pit_stops_skipped_missing_data}"))
             if pit_stops_skipped_invalid_date > 0:
                 self.stdout.write(self.style.WARNING(f"Registros ignorados (formato de data inválido): {pit_stops_skipped_invalid_date}"))
             if api_call_errors > 0:

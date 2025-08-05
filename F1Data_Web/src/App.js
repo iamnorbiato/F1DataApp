@@ -1,6 +1,5 @@
 // G:\Learning\F1Data\F1Data_Web\src\App.js
 import React, { useState, useEffect, useRef } from 'react';
-//import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import MeetingsList from './MeetingsList';
 import Sessions from './Sessions';
@@ -8,19 +7,14 @@ import CircuitMapPanel from './CircuitMapPanel';
 import SessionResultsPanel from './SessionResultsPanel';
 import RaceControl from './RaceControl';
 import DriversList from './DriversList';
-// NOVO: Importar TrackMap
 import TrackMap from './TrackMap';
-// INÍCIO DA CORREÇÃO: Sintaxe de importação da API_BASE_URL
-import { API_BASE_URL } from './api'; // CORRIGIDO: de ' = require' para 'from'
-// FIM DA CORREÇÃO
-console.log('API_BASE_URL:', API_BASE_URL);
+import { API_BASE_URL } from './api';
 
 // Função para converter uma data para ISO string UTC com "Z" no final
 function toUTCISOString(dateStr) {
   if (!dateStr) return null;
   const date = new Date(dateStr);
   if (isNaN(date)) return null; // Verifica data inválida
-
   return date.toISOString();
 }
 
@@ -34,11 +28,12 @@ function App() {
   const [selectedCircuitShortName, setSelectedCircuitShortName] = useState(null);
   const [selectedSessionKey, setSelectedSessionKey] = useState(null);
   const [circuitRef, setCircuitRef] = useState(null);
-  const [menuOrigin, setMenuOrigin] = useState(null); // 'races' ou 'telemetry'
+  const [menuOrigin, setMenuOrigin] = useState(null);
   const [selectedDriverNumber, setSelectedDriverNumber] = useState(null);
-  const [selectedDriverObject, setSelectedDriverObject] = useState(null); // Objeto completo do driver
-  const [selectedSessionStartDate, setSelectedSessionStartDate] = useState(null);
-  const [selectedSessionEndDate, setSelectedSessionEndDate] = useState(null);
+  const [selectedDriverObject, setSelectedDriverObject] = useState(null);
+  // REMOVIDO: Estados para as datas MIN e MAX de Location foram movidos para o TrackMap
+  // const [locationMinDate, setLocationMinDate] = useState(null);
+  // const [locationMaxDate, setLocationMaxDate] = useState(null);
 
   const handleHamburgerClick = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -47,7 +42,6 @@ function App() {
   const handleCloseMobileMenu = () => {
     setIsMobileMenuOpen(false);
     setShowYearDropdown(false);
-    setTimeout(() => setShowYearDropdown(false), 50);
   };
 
   const handleMenuClick = async (e, origin) => {
@@ -64,11 +58,10 @@ function App() {
     setSelectedMeetingName(null);
     setSelectedCircuitShortName(null);
     setSelectedSessionKey(null);
-    setSelectedSessionStartDate(null); // Resetar
-    setSelectedSessionEndDate(null);   // Resetar
+    // REMOVIDO: reset de datas de location
     setCircuitRef(null);
     setSelectedDriverNumber(null);
-    setSelectedDriverObject(null); // Resetar selectedDriverObject
+    setSelectedDriverObject(null);
 
     if (availableYears.length === 0) {
       try {
@@ -92,11 +85,10 @@ function App() {
     setSelectedMeetingName(null);
     setSelectedCircuitShortName(null);
     setSelectedSessionKey(null);
-    setSelectedSessionStartDate(null); // Resetar
-    setSelectedSessionEndDate(null);   // Resetar
+    // REMOVIDO: reset de datas de location
     setCircuitRef(null);
     setSelectedDriverNumber(null);
-    setSelectedDriverObject(null); // Resetar selectedDriverObject
+    setSelectedDriverObject(null);
     setShowYearDropdown(false);
     if (isMobileMenuOpen) setIsMobileMenuOpen(false);
   };
@@ -106,11 +98,9 @@ function App() {
     setSelectedMeetingName(meetingName);
     setSelectedCircuitShortName(circuitShortName);
     setSelectedSessionKey(null);
-    setSelectedSessionStartDate(null); // Resetar
-    setSelectedSessionEndDate(null);   // Resetar
-    setCircuitRef(null);
+    // REMOVIDO: reset de datas de location
     setSelectedDriverNumber(null);
-    setSelectedDriverObject(null); // Resetar selectedDriverObject
+    setSelectedDriverObject(null);
 
     if (menuOrigin === 'races' && circuitKeyForCircuit) {
       try {
@@ -141,19 +131,19 @@ function App() {
 
   const handleSessionSelect = (sessionKey, sessionName, dateStart, dateEnd) => {
     setSelectedSessionKey(sessionKey);
-    setSelectedSessionStartDate(dateStart); // Salva a data de início
-    setSelectedSessionEndDate(dateEnd);     // Salva a data de fim
-    setSelectedDriverNumber(null); // Reseta o driver selecionado ao mudar a sessão
-    setSelectedDriverObject(null); // Resetar selectedDriverObject
-    console.log(`Sessão selecionada: ${sessionKey}, ${sessionName}, ${dateStart} (Origem: ${menuOrigin})`);
+    // REMOVIDO: O TrackMap agora será responsável por buscar as datas de location
+    setSelectedDriverNumber(null);
+    setSelectedDriverObject(null); 
+    console.log(`Sessão selecionada: ${sessionKey}, ${sessionName} (Origem: ${menuOrigin})`);
   };
 
-  const handleDriverSelect = (driverObject) => { // driverObject é o objeto completo do driver
-    setSelectedDriverNumber(driverObject.driver_number); // Apenas o número para o estado (usado no estilo 'active' de DriversList)
-    setSelectedDriverObject(driverObject); // Guarda o objeto completo para o TrackMap
+  const handleDriverSelect = async (driverObject) => {
+    setSelectedDriverNumber(driverObject.driver_number);
+    setSelectedDriverObject(driverObject);
     console.log(`Driver selecionado: ${driverObject.driver_number}`);
+    // REMOVIDO: A chamada da API para min-max-location-date foi movida para o TrackMap
   };
-
+  
   return (
     <div className="App">
       <header className="main-header">
@@ -197,10 +187,8 @@ function App() {
 
       <main className="main-content-area">
         {selectedYear && (
-          // INÍCIO DA CORREÇÃO: Usando operador ternário para garantir um único elemento raiz de layout
           menuOrigin === 'races' ? (
-            <div className="races-layout-container"> {/* ESTE define o grid para Corridas */}
-              {/* Painéis para o modo "Corridas" - Direto no Grid */}
+            <div className="races-layout-container">
               <MeetingsList
                 selectedYear={selectedYear}
                 onMeetingSelect={handleMeetingSelect}
@@ -231,8 +219,7 @@ function App() {
               )}
             </div>
           ) : menuOrigin === 'telemetry' ? (
-            <div className="telemetry-layout-container"> {/* ESTE define o grid para Telemetria */}
-              {/* Painéis para o modo "Telemetria" - Direto no Grid */}
+            <div className="telemetry-layout-container">
               <MeetingsList
                 selectedYear={selectedYear}
                 onMeetingSelect={handleMeetingSelect}
@@ -253,7 +240,7 @@ function App() {
                     <DriversList
                       sessionKey={selectedSessionKey}
                       onDriverSelect={handleDriverSelect}
-                      selectedDriverNumber={selectedDriverNumber} // Para o estilo 'active'
+                      selectedDriverNumber={selectedDriverNumber}
                     />
                 </div>
               )}
@@ -262,17 +249,16 @@ function App() {
                   <TrackMap
                     sessionKey={selectedSessionKey}
                     selectedDriver={selectedDriverObject}
-                    startDate={toUTCISOString(selectedSessionStartDate)}
-                    endDate={toUTCISOString(selectedSessionEndDate)}
+                    // REMOVIDO: As datas agora são buscadas dentro do TrackMap
+                    // startDate={locationMinDate}
+                    // endDate={locationMaxDate}
                   />
                 </div>
               )}
             </div>
           ) : (
-            // Renderiza nada se selectedYear é true mas nenhum menuOrigin está ativo (ex: estado inicial)
             null
           )
-          // FIM DA CORREÇÃO
         )}
       </main>
     </div>

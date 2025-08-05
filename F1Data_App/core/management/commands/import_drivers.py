@@ -6,9 +6,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction, IntegrityError
 from django.conf import settings
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
 
 from core.models import Drivers
+
+# Importe o novo módulo de gerenciamento de token
+from .token_manager import get_api_token
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -29,15 +31,15 @@ class Command(BaseCommand):
         self.all_warnings_details.append(message)
         self.stdout.write(self.style.WARNING(message))
 
-    def fetch_drivers_data(self, meeting_key, use_token=True):
+    def fetch_drivers_data(self, meeting_key, api_token=None):
         url = f"{self.API_URL}?meeting_key={meeting_key}"
         headers = {"Accept": "application/json"}
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                raise CommandError("Token da API não encontrado.")
+        if api_token:
             headers["Authorization"] = f"Bearer {api_token}"
+        else:
+            self.stdout.write(self.style.NOTICE("Uso do token desativado ou token não disponível. Requisição será feita sem Authorization."))
+            self.warnings_count += 1
 
         for attempt in range(self.API_MAX_RETRIES):
             try:
@@ -101,21 +103,22 @@ class Command(BaseCommand):
         self.all_warnings_details = []
 
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
-        if use_api_token_flag:
-            try:
-                update_api_token_if_needed()
-            except Exception as e:
-                raise CommandError(f"Erro ao atualizar token: {e}")
-        else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg)."))
 
         meeting_key = options.get('meeting_key')
         mode = options.get('mode', 'I')
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"Iniciando importação de Drivers para meeting_key={meeting_key} (modo={mode})..."))
 
+        api_token = None
+        if use_api_token_flag:
+            api_token = get_api_token(self)
+        
+        if not api_token and use_api_token_flag:
+            self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+            use_api_token_flag = False
+
         try:
-            all_drivers = self.fetch_drivers_data(meeting_key=meeting_key, use_token=use_api_token_flag)
+            all_drivers = self.fetch_drivers_data(meeting_key=meeting_key, api_token=api_token)
         except Exception as e:
             raise CommandError(f"Erro ao buscar dados da API: {e}")
 

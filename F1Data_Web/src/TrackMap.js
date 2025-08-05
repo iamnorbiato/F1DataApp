@@ -2,16 +2,21 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Plotly from 'plotly.js/dist/plotly-basic';
 import Plot from 'react-plotly.js';
-import { API_BASE_URL } from './api';
+import { API_BASE_URL } from './api'; // ajuste o caminho se necessário
+console.log('API_BASE_URL:', API_BASE_URL);
 
-// MODIFICADO: Função para formatar o tempo como MM:SS.ms (tempo decorrido na sessão)
+
+const WINDOW_MILLISECONDS = 20 * 60 * 1000; // 20 minutos em milissegundos
+
+// Funções de formatação de data
 const formatTimeWithMilliseconds = (dateString) => {
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
-  // Para exibir como tempo decorrido, precisamos de um ponto de referência inicial da sessão
-  // Como não temos a data de início da *sessão completa* aqui, vamos assumir que o "00:00.00"
-  // seria o início do período do primeiro ponto de dados recebido na janela de 20 min.
-  // Para simplificar e mostrar apenas MM:SS.ms da data UTC, vamos calcular assim:
+  if (isNaN(date.getTime())) {
+    console.error('formatTimeWithMilliseconds: Invalid date string:', dateString);
+    return 'N/A';
+  }
+  
   const totalSeconds = date.getUTCMinutes() * 60 + date.getUTCSeconds() + date.getUTCMilliseconds() / 1000;
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -21,16 +26,41 @@ const formatTimeWithMilliseconds = (dateString) => {
   return `${String(minutes).padStart(2, '0')}:${String(secondsInt).padStart(2, '0')}.${String(milliseconds).padStart(3, '0').substring(0, 2)}`;
 };
 
-const formatDateUTCISOString = (date) => date.toISOString();
+const formatDateForDjango = (date) => {
+  let isoString = date.toISOString();
+  isoString = isoString.replace('Z', '').replace(/\.\d+$/, '');
+  
+  if (date.getUTCMilliseconds() > 0) {
+    isoString += '.' + String(date.getUTCMilliseconds()).padStart(3, '0');
+  }
 
-function TrackMap({ sessionKey, startDate, endDate, selectedDriver }) {
+  return isoString.replace('T', ' ');
+};
+
+
+function formatMillisecondsToMMSSmmm(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const milliseconds = ms % 1000;
+
+  return (
+    String(minutes).padStart(2, '0') +
+    ':' +
+    String(seconds).padStart(2, '0') +
+    '.' +
+    String(milliseconds).padStart(3, '0')
+  );
+}    
+
+
+function TrackMap({ sessionKey, selectedDriver }) { 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentTelemetryWindowStart, setCurrentTelemetryWindowStart] = useState(null);
   const [currentPointTime, setCurrentPointTime] = useState(null);
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
-  // REMOVIDO: debugMessages não é mais um estado, pois não será exibido na tela
-  // const [debugMessages, setDebugMessages] = useState([]); 
+  const [dataAvailable, setDataAvailable] = useState(true);
 
   const currentWindowTelemetryDataRef = useRef([]);
   const plotDivRef = useRef(null);
@@ -39,202 +69,35 @@ function TrackMap({ sessionKey, startDate, endDate, selectedDriver }) {
   const animationStartTimeRef = useRef(performance.now());
   const speedMultiplierValueRef = useRef(1.0);
 
-  const sessionStartDateRef = useRef(null);
-  const sessionEndDateRef = useRef(null);
+  const locationMinDateRef = useRef(null);
+  const locationMaxDateRef = useRef(null);
+  const telemetryDataFetching = useRef(false);
 
-  // REMOVIDO: addDebugMessage não é mais uma função de callback de estado
-  // Agora usará console.log diretamente para as mensagens de depuração
+  // Função auxiliar para calcular tempo decorrido da sessão em segundos
+  const sessionDurationSeconds = locationMaxDateRef.current && locationMinDateRef.current
+    ? (locationMaxDateRef.current.getTime() - locationMinDateRef.current.getTime()) / 1000
+    : 0;
+
+  // Função para formatar segundos em mm:ss
+  const formatSecondsToMMSS = (totalSeconds) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+  };
+
+  // Recalcula animationStartTimeRef para manter a posição atual ao mudar velocidade
+  const adjustAnimationStartTime = (newSpeed) => {
+    const now = performance.now();
+    const elapsedRealTime = now - animationStartTimeRef.current;
+    const elapsedAnimationTime = elapsedRealTime * speedMultiplierValueRef.current; // tempo virtual da animação antes da mudança
+    animationStartTimeRef.current = now - (elapsedAnimationTime / newSpeed);
+    speedMultiplierValueRef.current = newSpeed;
+    setSpeedMultiplier(newSpeed);
+  };
+  
+  
   const logDebugMessage = (message) => {
-    // Apenas loga no console para mensagens de depuração críticas
     console.log(`TrackMap Debug: ${message}`);
-  };
-
-  useEffect(() => {
-    if (sessionKey && startDate) {
-      const start = new Date(startDate);
-      if (!isNaN(start)) {
-        setCurrentTelemetryWindowStart(start);
-        sessionStartDateRef.current = start;
-        logDebugMessage(`Sessão iniciada. Data de início: ${start.toISOString()}`);
-      } else {
-        logDebugMessage(`Erro: startDate inválida: ${startDate}`);
-        console.error('TrackMap: Invalid startDate received:', startDate);
-      }
-    } else {
-      setCurrentTelemetryWindowStart(null);
-      sessionStartDateRef.current = null;
-      logDebugMessage('Sessão ou Data de Início nula/indefinida.');
-    }
-    // Não é mais necessário limpar debugMessages aqui
-  }, [sessionKey, startDate]);
-
-  useEffect(() => {
-    if (endDate) {
-      const end = new Date(endDate);
-      if (!isNaN(end)) {
-        sessionEndDateRef.current = end;
-        logDebugMessage(`Data final da sessão definida: ${sessionEndDateRef.current.toISOString()}`);
-      } else {
-        logDebugMessage(`Erro: endDate inválida: ${endDate}`);
-        console.error('TrackMap: Invalid endDate received:', endDate);
-        sessionEndDateRef.current = null;
-      }
-    } else {
-      sessionEndDateRef.current = null;
-      logDebugMessage('endDate é nula/indefinida.');
-    }
-  }, [endDate]);
-
-  useEffect(() => {
-    if (animationFrameIdRef.current) {
-      cancelAnimationFrame(animationFrameIdRef.current);
-      animationFrameIdRef.current = null;
-    }
-
-    if (!selectedDriver || !sessionKey || !currentTelemetryWindowStart) {
-      setLoading(false);
-      currentWindowTelemetryDataRef.current = [];
-      if (plotDivRef.current) {
-        Plotly.purge(plotDivRef.current);
-      }
-      return;
-    }
-
-    const fetchTelemetryData = async () => {
-      setLoading(true);
-      setError(null);
-      logDebugMessage(`Buscando dados para: ${formatDateUTCISOString(currentTelemetryWindowStart)}`);
-      try {
-        const url = `${API_BASE_URL}/api/location-by-session-and-driver/?session_key=${sessionKey}&driver_number=${selectedDriver.driver_number}&date=${formatDateUTCISOString(currentTelemetryWindowStart)}`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Erro ao buscar telemetria: ${response.status}`);
-        const data = await response.json();
-        const sorted = data.sort((a, b) => new Date(a.date) - new Date(b.date));
-        currentWindowTelemetryDataRef.current = sorted;
-        logDebugMessage(`Dados recebidos. Pontos: ${sorted.length}. Preparando animação.`);
-
-        if (plotDivRef.current && sorted.length > 0) {
-          const newTrackTrace = {
-            x: sorted.map(d => d.x),
-            y: sorted.map(d => d.y),
-            mode: 'lines',
-            name: 'Traçado da Pista',
-            line: { color: 'gray', width: 1 },
-            hoverinfo: 'none'
-          };
-          const initialPoint = sorted[0];
-          const newCarPositionTrace = {
-            x: initialPoint ? [initialPoint.x] : [],
-            y: initialPoint ? [initialPoint.y] : [],
-            mode: 'markers',
-            marker: { size: 10, color: 'red' },
-            name: 'Carro',
-            hoverinfo: 'x+y+text',
-            text: initialPoint ? [`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${formatTimeWithMilliseconds(initialPoint.date)}`] : []
-          };
-          
-          Plotly.react(plotDivRef.current, [newTrackTrace, newCarPositionTrace], getLayout());
-        }
-
-      } catch (err) {
-        setError(err.message || 'Erro ao carregar telemetria.');
-        logDebugMessage(`Erro ao buscar telemetria: ${err.message}`);
-        console.error('TrackMap: Error fetching telemetry:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTelemetryData();
-  }, [sessionKey, selectedDriver, currentTelemetryWindowStart, API_BASE_URL]);
-
-  useEffect(() => {
-    if (currentWindowTelemetryDataRef.current.length < 2 || !plotDivRef.current) {
-      cancelAnimationFrame(animationFrameIdRef.current);
-      return;
-    }
-
-    currentPointIndexRef.current = 0;
-    animationStartTimeRef.current = performance.now();
-
-    const animateCar = (timestamp) => {
-      const data = currentWindowTelemetryDataRef.current;
-      if (!plotDivRef.current || data.length === 0) {
-        animationFrameIdRef.current = null;
-        return;
-      }
-
-      const elapsed = timestamp - animationStartTimeRef.current;
-      const basePointsPerSecond = 5;
-      const effectivePointsPerSecond = basePointsPerSecond * speedMultiplierValueRef.current;
-
-      if (effectivePointsPerSecond <= 0) {
-        animationFrameIdRef.current = requestAnimationFrame(animateCar);
-        return;
-      }
-
-      const index = Math.floor(elapsed / (1000 / effectivePointsPerSecond));
-
-      if (index >= data.length) {
-        const WINDOW_MILLISECONDS = 20 * 60 * 1000;
-        let newStart = null;
-
-        if (currentTelemetryWindowStart) {
-          newStart = new Date(currentTelemetryWindowStart.getTime() + WINDOW_MILLISECONDS);
-        }
-
-        if (newStart && sessionEndDateRef.current && newStart <= sessionEndDateRef.current) {
-          console.log(`TrackMap Debug: AVANÇANDO! Próxima data de API: ${newStart.toISOString()}`);
-          setCurrentTelemetryWindowStart(newStart);
-        } else {
-          // Mensagens de FINALIZAÇÃO para o CONSOLE
-          console.log('TrackMap Debug: !!! ANIMAÇÃO FINALIZADA !!!');
-          if (!newStart) console.log('TrackMap Debug: Motivo: Próxima Janela é nula.');
-          if (!sessionEndDateRef.current) console.log('TrackMap Debug: Motivo: Data Final da Sessão é nula.');
-          if (newStart && sessionEndDateRef.current && newStart > sessionEndDateRef.current) {
-            console.log(`TrackMap Debug: Motivo: Próxima Janela (${newStart.toISOString()}) ultrapassou Data Final da Sessão (${sessionEndDateRef.current.toISOString()}).`);
-          }
-        }
-        return;
-      }
-
-      const point = data[index];
-      if (point) {
-        setCurrentPointTime(point.date);
-        try {
-          Plotly.restyle(plotDivRef.current, {
-            x: [[point.x]],
-            y: [[point.y]],
-            text: [[`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${formatTimeWithMilliseconds(point.date)}`]]
-          }, [1]);
-        } catch (err) {
-          console.warn("TrackMap: Erro ao animar ponto (restyle):", err);
-        }
-      }
-
-      animationFrameIdRef.current = requestAnimationFrame(animateCar);
-    };
-
-    cancelAnimationFrame(animationFrameIdRef.current);
-    animationFrameIdRef.current = requestAnimationFrame(animateCar);
-
-    return () => cancelAnimationFrame(animationFrameIdRef.current);
-  }, [currentWindowTelemetryDataRef.current, selectedDriver, currentTelemetryWindowStart]);
-
-  const handleSlower = () => {
-    setSpeedMultiplier(prev => {
-      const newSpeed = Math.max(0.1, prev * 0.5);
-      speedMultiplierValueRef.current = newSpeed;
-      return newSpeed;
-    });
-  };
-
-  const handleFaster = () => {
-    setSpeedMultiplier(prev => {
-      const newSpeed = Math.min(10.0, prev * 1.5);
-      speedMultiplierValueRef.current = newSpeed;
-      return newSpeed;
-    });
   };
 
   const getLayout = useCallback(() => ({
@@ -247,14 +110,300 @@ function TrackMap({ sessionKey, startDate, endDate, selectedDriver }) {
     showlegend: false,
     hovermode: 'closest',
   }), []);
+  
+  const fetchTelemetryData = useCallback(async (start_date) => {
+    if (telemetryDataFetching.current) return;
+    
+    telemetryDataFetching.current = true;
+    setLoading(true);
+    setError(null);
+    
+    const currentTelemetryWindowEnd = new Date(start_date.getTime() + WINDOW_MILLISECONDS);
 
+  try {
+    const url = `${API_BASE_URL}/api/location-by-session-and-driver/?session_key=${sessionKey}&driver_number=${selectedDriver.driver_number}&date__gte=${formatDateForDjango(start_date)}&date__lt=${formatDateForDjango(currentTelemetryWindowEnd)}`;
+
+    console.log('DEBUG TrackMap.js: URL da API de localização:', url);
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro ao buscar telemetria: ${response.status} - ${errorText}`);
+    }
+    const data = await response.json();
+    const sorted = data.sort((a, b) => new Date(a.date) - new Date(b.date));
+    currentWindowTelemetryDataRef.current = sorted;
+    logDebugMessage(`Dados recebidos. Pontos: ${sorted.length}. Preparando animação.`);
+
+    if (plotDivRef.current && sorted.length > 0) {
+      const newTrackTrace = {
+        x: sorted.map(d => d.x),
+        y: sorted.map(d => d.y),
+        mode: 'lines',
+        name: 'Traçado da Pista',
+        line: { color: 'gray', width: 1 },
+        hoverinfo: 'none'
+      };
+      const initialPoint = sorted[0];
+      const newCarPositionTrace = {
+        x: initialPoint ? [initialPoint.x] : [],
+        y: initialPoint ? [initialPoint.y] : [],
+        mode: 'markers',
+        marker: { size: 10, color: 'red' },
+        name: 'Carro',
+        hoverinfo: 'x+y+text',
+        text: initialPoint ? [`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${formatTimeWithMilliseconds(initialPoint.date)}`] : []
+      };
+
+      // AQUI: se for a primeira vez, cria novo gráfico
+      if (!plotDivRef.current.data || plotDivRef.current.data.length === 0) {
+        Plotly.newPlot(plotDivRef.current, [newTrackTrace, newCarPositionTrace], getLayout());
+      } else {
+        // se gráfico já existe, atualiza só os dados sem recriar o gráfico (sem flicker)
+        Plotly.restyle(plotDivRef.current, {
+          x: [newTrackTrace.x],
+          y: [newTrackTrace.y]
+        }, [0]); // atualiza a linha da pista (trace 0)
+
+        Plotly.restyle(plotDivRef.current, {
+          x: [newCarPositionTrace.x],
+          y: [newCarPositionTrace.y],
+          text: [newCarPositionTrace.text]
+        }, [1]); // atualiza posição inicial do carro (trace 1)
+      }
+    } else {
+      if (currentTelemetryWindowEnd < locationMaxDateRef.current) {
+        setCurrentTelemetryWindowStart(currentTelemetryWindowEnd);
+      }
+    }
+
+  } catch (err) {
+    setError(err.message || 'Erro ao carregar telemetria.');
+    logDebugMessage(`Erro ao buscar telemetria: ${err.message}`);
+    console.error('TrackMap: Error fetching telemetry:', err);
+  } finally {
+    setLoading(false);
+    telemetryDataFetching.current = false;
+  }
+  
+/*AQUI
+    try {
+      const url = `${API_BASE_URL}/api/location-by-session-and-driver/?session_key=${sessionKey}&driver_number=${selectedDriver.driver_number}&date__gte=${formatDateForDjango(start_date)}&date__lt=${formatDateForDjango(currentTelemetryWindowEnd)}`;
+      
+      console.log('DEBUG TrackMap.js: URL da API de localização:', url);
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erro ao buscar telemetria: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      const sorted = data.sort((a, b) => new Date(a.date) - new Date(b.date));
+      currentWindowTelemetryDataRef.current = sorted;
+      logDebugMessage(`Dados recebidos. Pontos: ${sorted.length}. Preparando animação.`);
+
+      if (plotDivRef.current && sorted.length > 0) {
+        const newTrackTrace = {
+          x: sorted.map(d => d.x),
+          y: sorted.map(d => d.y),
+          mode: 'lines',
+          name: 'Traçado da Pista',
+          line: { color: 'gray', width: 1 },
+          hoverinfo: 'none'
+        };
+        const initialPoint = sorted[0];
+        const newCarPositionTrace = {
+          x: initialPoint ? [initialPoint.x] : [],
+          y: initialPoint ? [initialPoint.y] : [],
+          mode: 'markers',
+          marker: { size: 10, color: 'red' },
+          name: 'Carro',
+          hoverinfo: 'x+y+text',
+          text: initialPoint ? [`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${formatTimeWithMilliseconds(initialPoint.date)}`] : []
+        };
+        
+        Plotly.react(plotDivRef.current, [newTrackTrace, newCarPositionTrace], getLayout());
+      } else {
+        if (currentTelemetryWindowEnd < locationMaxDateRef.current) {
+          setCurrentTelemetryWindowStart(currentTelemetryWindowEnd);
+        }
+      }
+
+    } catch (err) {
+      setError(err.message || 'Erro ao carregar telemetria.');
+      logDebugMessage(`Erro ao buscar telemetria: ${err.message}`);
+      console.error('TrackMap: Error fetching telemetry:', err);
+    } finally {
+      setLoading(false);
+      telemetryDataFetching.current = false;
+    }
+AQUI*/
+  }, [sessionKey, selectedDriver, currentTelemetryWindowStart, getLayout]);
+
+
+  const animateCar = useCallback((timestamp) => {
+    const data = currentWindowTelemetryDataRef.current;
+    if (!plotDivRef.current || data.length === 0) {
+      cancelAnimationFrame(animationFrameIdRef.current);
+      animationFrameIdRef.current = null;
+      if (currentTelemetryWindowStart && locationMaxDateRef.current && currentTelemetryWindowStart < locationMaxDateRef.current) {
+        setCurrentTelemetryWindowStart(new Date(currentTelemetryWindowStart.getTime() + WINDOW_MILLISECONDS));
+      } else {
+        logDebugMessage('Nenhum dado no último chunk. Animação finalizada.');
+        setDataAvailable(false);
+      }
+      return;
+    }
+
+    const elapsed = timestamp - animationStartTimeRef.current;
+    const basePointsPerSecond = 5;
+    const effectivePointsPerSecond = basePointsPerSecond * speedMultiplierValueRef.current;
+
+    if (effectivePointsPerSecond <= 0) {
+      animationFrameIdRef.current = requestAnimationFrame(animateCar);
+      return;
+    }
+
+    const index = Math.floor(elapsed / (1000 / effectivePointsPerSecond));
+
+    if (index >= data.length) {
+      let newStart = new Date(currentTelemetryWindowStart.getTime() + WINDOW_MILLISECONDS);
+
+      if (newStart <= locationMaxDateRef.current) {
+        logDebugMessage(`AVANÇANDO! Próxima data de API: ${newStart.toISOString()}`);
+        setCurrentTelemetryWindowStart(newStart);
+      } else {
+        logDebugMessage('!!! ANIMAÇÃO FINALIZADA !!!');
+        setDataAvailable(false);
+      }
+      return;
+    }
+
+    const point = data[index];
+    if (point) {
+      setCurrentPointTime(point.date);
+      try {
+        Plotly.restyle(plotDivRef.current, {
+          x: [[point.x]],
+          y: [[point.y]],
+          text: [[`Driver: ${selectedDriver?.full_name || selectedDriver?.driver_number}<br>Time: ${formatTimeWithMilliseconds(point.date)}`]]
+        }, [1]);
+      } catch (err) {
+        console.warn("TrackMap: Erro ao animar ponto (restyle):", err);
+      }
+    }
+
+    animationFrameIdRef.current = requestAnimationFrame(animateCar);
+  }, [currentTelemetryWindowStart, locationMaxDateRef, selectedDriver, speedMultiplierValueRef]);
+
+
+  useEffect(() => {
+    if (!selectedDriver || !sessionKey) {
+      setDataAvailable(true);
+      return;
+    }
+
+    const fetchMinMaxDates = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            console.log(`Buscando datas MIN/MAX para Sessão ${sessionKey}, Driver ${selectedDriver.driver_number}...`);
+            const url = `${API_BASE_URL}/api/min-max-location-date/?session_key=${sessionKey}&driver_number=${selectedDriver.driver_number}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Erro ao buscar datas Min/Max: ${response.status} - ${errorText}`);
+            }
+            const data = await response.json();
+            if (data.min_date && data.max_date) {
+                const min_date_obj = new Date(data.min_date);
+                const max_date_obj = new Date(data.max_date);
+                locationMinDateRef.current = min_date_obj;
+                locationMaxDateRef.current = max_date_obj;
+                setCurrentTelemetryWindowStart(min_date_obj);
+                console.log(`Datas MIN/MAX de location recebidas: MIN=${data.min_date}, MAX=${data.max_date}`);
+            } else {
+                console.warn(`WARN: Nenhum dado de localização encontrado para Sessão ${sessionKey}, Driver ${selectedDriver.driver_number}.`);
+                setDataAvailable(false);
+            }
+        } catch (error) {
+            console.error("ERROR: Erro ao buscar as datas MIN/MAX da Location:", error);
+            setError(error.message || 'Erro ao carregar datas de telemetria.');
+            setDataAvailable(false);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchMinMaxDates();
+  }, [sessionKey, selectedDriver]);
+
+
+  useEffect(() => {
+    if (currentTelemetryWindowStart && dataAvailable && !telemetryDataFetching.current) {
+        fetchTelemetryData(currentTelemetryWindowStart);
+    }
+  }, [currentTelemetryWindowStart, dataAvailable, fetchTelemetryData]);
+
+
+  useEffect(() => {
+    if (animationFrameIdRef.current) {
+      cancelAnimationFrame(animationFrameIdRef.current);
+    }
+
+    if (currentWindowTelemetryDataRef.current.length > 1 && plotDivRef.current) {
+        animationStartTimeRef.current = performance.now();
+        animationFrameIdRef.current = requestAnimationFrame(animateCar);
+    }
+
+    return () => cancelAnimationFrame(animationFrameIdRef.current);
+  }, [currentWindowTelemetryDataRef.current, animateCar]);
+
+  const handleSlower = () => {
+    setSpeedMultiplier(prev => {
+      const newSpeed = Math.max(0.1, prev * 0.5);
+      adjustAnimationStartTime(newSpeed);
+      return newSpeed; // setSpeedMultiplier será chamado dentro de adjustAnimationStartTime, mas mantemos pra React
+    });
+  };
+
+  const handleFaster = () => {
+    setSpeedMultiplier(prev => {
+      const newSpeed = Math.min(10.0, prev * 1.5);
+      adjustAnimationStartTime(newSpeed);
+      return newSpeed;
+    });
+  };
+
+  // Para mostrar o tempo decorrido da sessão entre os botões no render:
+  const elapsedSeconds = (() => {
+    if (!animationStartTimeRef.current || !performance.now()) return 0;
+    const now = performance.now();
+    const elapsedRealTime = now - animationStartTimeRef.current;
+    return Math.floor(elapsedRealTime * speedMultiplierValueRef.current);
+  })();
+
+  const elapsedMilliseconds = (() => {
+    if (!animationStartTimeRef.current || !performance.now()) return 0;
+    const now = performance.now();
+    const elapsedRealTime = now - animationStartTimeRef.current;
+    return Math.floor(elapsedRealTime * speedMultiplierValueRef.current);
+  })();
+
+  const displayElapsedTime = locationMinDateRef.current
+  ? formatMillisecondsToMMSSmmm(elapsedMilliseconds)
+  : '00:00.000';
+
+  const sessionDurationMs = locationMaxDateRef.current && locationMinDateRef.current
+    ? locationMaxDateRef.current.getTime() - locationMinDateRef.current.getTime()
+    : 0;
+      
+  const displaySessionDuration = sessionDurationMs > 0
+    ? formatMillisecondsToMMSSmmm(sessionDurationMs)
+    : '00:00.000';
+    
   if (loading) return <p>Carregando mapa da pista...</p>;
   if (!selectedDriver) return <p>Nenhum piloto selecionado para o mapa da pista.</p>;
   if (error) return <p style={{ color: 'red' }}>Erro: {error}</p>;
-  if (selectedDriver && currentWindowTelemetryDataRef.current.length === 0 && currentTelemetryWindowStart && sessionEndDateRef.current && currentTelemetryWindowStart < sessionEndDateRef.current)
-    return <p>Carregando dados de telemetria para o driver {selectedDriver.full_name || selectedDriver.driver_number}...</p>;
-  if (selectedDriver && currentWindowTelemetryDataRef.current.length === 0)
-    return <p>Nenhum dado de telemetria encontrado para o driver {selectedDriver.full_name || selectedDriver.driver_number} ou fim da sessão alcançado.</p>;
+  if (!dataAvailable) return <p>Nenhum dado de telemetria encontrado para o driver {selectedDriver.full_name || selectedDriver.driver_number} ou fim da sessão alcançado.</p>;
+
 
   const initialPoint = currentWindowTelemetryDataRef.current[0];
   const initialDataForPlot = [
@@ -278,10 +427,8 @@ function TrackMap({ sessionKey, startDate, endDate, selectedDriver }) {
   ];
 
   return (
-    <div className="track-map-container drivers-list-panel">
+    <div className="telemetry-display-panel">
       <h2 className="panel-title">Movimentação na Pista: {selectedDriver?.full_name || `Driver ${selectedDriver?.driver_number}`}</h2>
-
-      {/* REMOVIDO: Div para mensagens de debug na tela */}
 
       <Plot
         data={initialDataForPlot}
@@ -294,14 +441,13 @@ function TrackMap({ sessionKey, startDate, endDate, selectedDriver }) {
       />
 
       <div className="track-map-controls">
-        <button className="track-map-nav-button" onClick={handleSlower}>&lt;&lt;&lt;</button>
-        {/* RESTAURADO COM FORMATO AJUSTADO: Span para exibir o tempo do ponto atual da animação (currentPointTime) */}
+        <button className="track-map-nav-button" onClick={handleSlower}>Slow</button>
         <span className="track-map-current-time">
-          {currentPointTime
-            ? formatTimeWithMilliseconds(currentPointTime) // Chama a função ajustada
-            : '00:00.00'}
+          
+          {displayElapsedTime} / {displaySessionDuration}
+            
         </span>
-        <button className="track-map-nav-button" onClick={handleFaster}>&gt;&gt;&gt;</button>
+        <button className="track-map-nav-button" onClick={handleFaster}>Fast</button>
       </div>
     </div>
   );

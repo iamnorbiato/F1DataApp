@@ -35,7 +35,7 @@ function Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) {
     };
 
     fetchSessions();
-  }, [meetingKey, API_BASE_URL]);
+  }, [meetingKey]);
 
   const formatSessionDate = (dateString) => {
     if (!dateString) return 'N/A';

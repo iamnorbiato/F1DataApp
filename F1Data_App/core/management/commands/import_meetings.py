@@ -1,5 +1,4 @@
 # G:\Learning\F1Data\F1Data_App\core\management\commands\import_meetings.py
-
 import requests
 import json
 import os
@@ -12,7 +11,9 @@ from django.conf import settings
 
 from core.models import Meetings
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
+
+# Importe o novo módulo de gerenciamento de token
+from .token_manager import get_api_token
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -23,6 +24,7 @@ class Command(BaseCommand):
     CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
 
     API_DELAY_SECONDS = 0.2
+    warnings_count = 0
 
     def add_arguments(self, parser):
         parser.add_argument('--meeting_key', type=int, help='Especifica um Meeting Key para importação/atualização (opcional).')
@@ -33,6 +35,7 @@ class Command(BaseCommand):
         config = {}
         if not os.path.exists(self.CONFIG_FILE):
             self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
+            self.warnings_count += 1
             return default
         try:
             with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -69,7 +72,7 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f"Erro inesperado ao buscar o último meeting_key: {e}")
 
-    def fetch_meetings_data(self, meeting_key=None, use_token=True):
+    def fetch_meetings_data(self, meeting_key=None, api_token=None):
         url = self.API_URL
         if meeting_key:
             url = f"{self.API_URL}?meeting_key={meeting_key}"
@@ -77,15 +80,12 @@ class Command(BaseCommand):
         headers = {
             "Accept": "application/json"
         }
-
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.stdout.write(self.style.WARNING("Token da API (OPENF1_API_TOKEN) não encontrado em env. Requisição será feita sem Authorization."))
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
         else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado. Requisição será feita sem Authorization."))
+            self.stdout.write(self.style.NOTICE("Uso do token desativado ou token não disponível. Requisição será feita sem Authorization."))
+            self.warnings_count += 1
 
         self.stdout.write(f"Buscando dados da API: {url}")
         try:
@@ -148,11 +148,11 @@ class Command(BaseCommand):
             raise
 
     def handle(self, *args, **options):
-        load_dotenv(dotenv_path=ENV_FILE_PATH) # Carrega as variáveis do .env
+        load_dotenv(dotenv_path=ENV_FILE_PATH)
 
         meeting_key_param = options.get('meeting_key')
         mode_param = options.get('mode')
-
+        
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
 
         self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação/atualização de Meetings (ORM)..."))
@@ -163,33 +163,25 @@ class Command(BaseCommand):
         meetings_updated_db = 0
         meetings_skipped_db = 0
 
+        api_token = None
+        if use_api_token_flag:
+            api_token = get_api_token(self)
+        
+        if not api_token and use_api_token_flag:
+            self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+            self.warnings_count += 1
+            use_api_token_flag = False
+
         try:
-            if use_api_token_flag:
-                try:
-                    self.stdout.write("Verificando e atualizando o token da API, se necessário...")
-                    update_api_token_if_needed()
-                    # >>> CORREÇÃO AQUI: Recarrega as variáveis de ambiente após possível atualização <<<
-                    load_dotenv(dotenv_path=ENV_FILE_PATH, override=True) # Recarrega para obter o token mais recente
-                    current_api_token = os.getenv('OPENF1_API_TOKEN')
-                    if not current_api_token:
-                        raise CommandError("Token da API (OPENF1_API_TOKEN) não disponível após verificação/atualização. Não é possível prosseguir com importação autenticada.")
-                    self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Falha ao verificar/atualizar o token da API: {e}. Prosseguindo sem usar o token da API."))
-                    use_api_token_flag = False
-
-            if not use_api_token_flag:
-                self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no .env ou falha na obtenção do token). Buscando dados históricos sem autenticação."))
-
             meetings_from_api = []
             if meeting_key_param:
                 self.stdout.write(f"Buscando meeting_key específico: {meeting_key_param}...")
-                meetings_from_api = self.fetch_meetings_data(meeting_key=meeting_key_param, use_token=use_api_token_flag)
+                meetings_from_api = self.fetch_meetings_data(meeting_key=meeting_key_param, api_token=api_token)
                 if not meetings_from_api:
                     self.stdout.write(self.style.WARNING(f"Nenhum meeting encontrado na API para meeting_key={meeting_key_param}."))
             else:
                 self.stdout.write("Buscando todos os meetings da API...")
-                meetings_from_api = self.fetch_meetings_data(use_token=use_api_token_flag)
+                meetings_from_api = self.fetch_meetings_data(api_token=api_token)
 
             meetings_found_api = len(meetings_from_api)
             self.stdout.write(f"Meetings encontrados na API para processamento: {meetings_found_api}")
@@ -213,6 +205,7 @@ class Command(BaseCommand):
                             self.stdout.write(self.style.ERROR(f"Não foi possível processar o meeting {meeting_entry.get('meeting_key', 'N/A')} devido a um modo inválido ou erro interno."))
                 except Exception as meeting_process_e:
                     self.stdout.write(self.style.ERROR(f"Erro ao processar/inserir/atualizar UM REGISTRO de meeting: {meeting_process_e}. Pulando para o próximo registro."))
+                    self.warnings_count += 1
 
                 if self.API_DELAY_SECONDS > 0:
                     time.sleep(self.API_DELAY_SECONDS)
@@ -229,5 +222,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Meetings novos inseridos no DB: {meetings_inserted_db}"))
             self.stdout.write(self.style.SUCCESS(f"Meetings existentes atualizados no DB: {meetings_updated_db}"))
             self.stdout.write(self.style.NOTICE(f"Meetings ignorados (já existiam no DB em modo 'I'): {meetings_skipped_db}"))
+            self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
             self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
             self.stdout.write(self.style.SUCCESS("Processamento de meetings finalizado (ORM)!"))

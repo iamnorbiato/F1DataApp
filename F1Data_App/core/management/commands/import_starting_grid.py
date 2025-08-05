@@ -3,17 +3,18 @@ import requests
 import json
 import os
 import time
-from datetime import datetime, timezone, timedelta # Necessário para format_datetime_for_api_url se fosse usado
+from datetime import datetime, timezone, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
 from django.conf import settings
 
 # Importa os modelos necessários
-from core.models import StartingGrid, Meetings # Importado Meetings para iterar por meeting_keys se necessário
+from core.models import StartingGrid, Meetings
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
-import pytz # Para manipulação de fusos horários (não usado diretamente neste, mas boa prática)
+
+# Importe o novo módulo de gerenciamento de token
+from .token_manager import get_api_token
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -26,6 +27,7 @@ class Command(BaseCommand):
     API_MAX_RETRIES = 3
     API_RETRY_DELAY_SECONDS = 5
     BULK_SIZE = 5000
+    warnings_count = 0
 
     def add_arguments(self, parser):
         parser.add_argument('--meeting_key', type=int, help='Especifica um Meeting Key para filtrar a importação (opcional). Se omitido, processa todos os dados retornados pela API.')
@@ -40,24 +42,15 @@ class Command(BaseCommand):
         self.all_warnings_details.append(message)
         self.stdout.write(self.style.WARNING(message))
 
-    # get_config_value foi removido.
-
-    def fetch_starting_grid_data(self, use_token=True):
-        """
-        Busca todos os dados de starting grid da API OpenF1 (sem filtros de meeting_key, esperando tudo).
-        """
+    def fetch_starting_grid_data(self, api_token=None):
         url = self.API_URL
         
         headers = {"Accept": "application/json"}
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
         else:
-            self.add_warning("Uso do token desativado (use_token=False). Requisição será feita sem Authorization.")
+            self.add_warning("Uso do token desativado ou token não disponível. Requisição será feita sem Authorization.")
 
         for attempt in range(self.API_MAX_RETRIES):
             try:
@@ -80,35 +73,28 @@ class Command(BaseCommand):
         return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
     def process_starting_grid_entry(self, sg_data_dict, mode):
-        """
-        Processa um único registro de starting grid, inserindo ou atualizando.
-        Retorna 'inserted', 'updated', ou 'skipped_missing_data'/'skipped_invalid_value'.
-        """
         meeting_key = sg_data_dict.get('meeting_key')
         session_key = sg_data_dict.get('session_key')
         position = sg_data_dict.get('position')
         driver_number = sg_data_dict.get('driver_number')
         lap_duration = sg_data_dict.get('lap_duration')
 
-        # Validação crítica para campos NOT NULL na PK (meeting_key, session_key, driver_number)
         if any(val is None for val in [meeting_key, session_key, driver_number]):
             missing_fields = [k for k,v in {'meeting_key': meeting_key, 'session_key': session_key, 'driver_number': driver_number}.items() if v is None]
             self.add_warning(f"StartingGrid ignorado: dados obrigatórios ausentes para PK (Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}). Faltando: {missing_fields}")
             return 'skipped_missing_data'
 
-        # Tratamento de position (se for None, assume 0 se o modelo não permite null)
         if position is None:
-            position = 0 # Default para 0 se a API enviar NULL e DDL for NOT NULL
+            position = 0
             self.add_warning(f"Aviso: 'position' é null para Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}. Usando 0.")
 
-        # Tratamento de lap_duration (numeric(8,3))
         lap_duration_parsed = None
         if lap_duration is not None:
             try:
                 lap_duration_parsed = float(str(lap_duration).replace(',', '.').strip())
             except ValueError:
                 self.add_warning(f"Aviso: Valor de 'lap_duration' '{lap_duration}' não é numérico para Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}. Ignorando o valor.")
-                return 'skipped_invalid_value' # Um novo status para valores inválidos, mas não PK
+                return 'skipped_invalid_value'
         
         defaults = {
             'position': position,
@@ -124,7 +110,7 @@ class Command(BaseCommand):
                     defaults=defaults
                 )
                 return 'inserted' if created else 'updated'
-            else: # mode == 'I'
+            else:
                 if StartingGrid.objects.filter(
                     meeting_key=meeting_key,
                     session_key=session_key,
@@ -165,33 +151,23 @@ class Command(BaseCommand):
         sg_found_api_total = 0
         sg_inserted_db = 0
         sg_updated_db = 0
-        sg_skipped_db = 0 # Inclui skipped por conflito PK (mode I), erros de dados obrigatórios, etc.
-        sg_skipped_invalid_value = 0 # Para casos como lap_duration não numérico.
-        sg_skipped_missing_data = 0 # Para dados obrigatórios de PK ausentes
+        sg_skipped_db = 0
+        sg_skipped_invalid_value = 0
+        sg_skipped_missing_data = 0
         api_call_errors = 0
 
 
         try:
+            api_token = None
             if use_api_token_flag:
-                try:
-                    self.stdout.write("Verificando e atualizando o token da API, se necessário...")
-                    update_api_token_if_needed()
-                    # CORREÇÃO CRÍTICA AQUI: Recarrega as variáveis de ambiente após possível atualização
-                    load_dotenv(dotenv_path=ENV_FILE_PATH, override=True)
-                    current_api_token = os.getenv('OPENF1_API_TOKEN')
-                    if not current_api_token:
-                        raise CommandError("Token da API (OPENF1_API_TOKEN) não disponível após verificação/atualização. Não é possível prosseguir com importação autenticada.")
-                    self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Falha ao verificar/atualizar o token da API: {e}. Prosseguindo sem usar o token da API."))
-                    use_api_token_flag = False
+                api_token = get_api_token(self)
+            
+            if not api_token and use_api_token_flag:
+                self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+                self.warnings_count += 1
+                use_api_token_flag = False
 
-            if not use_api_token_flag:
-                self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False ou falha na obtenção do token). Buscando dados sem autenticação."))
-
-            # A API de StartingGrid não aceita filtros por meeting_key.
-            # Buscamos tudo e filtramos localmente, se meeting_key_param for fornecido.
-            all_sg_from_api_raw = self.fetch_starting_grid_data(use_token=use_api_token_flag)
+            all_sg_from_api_raw = self.fetch_starting_grid_data(api_token=api_token)
             
             if isinstance(all_sg_from_api_raw, dict) and "error_status" in all_sg_from_api_raw:
                 api_call_errors += 1
@@ -203,7 +179,6 @@ class Command(BaseCommand):
 
             sg_found_api_total = len(all_sg_from_api_raw)
 
-            # Filtrar os dados da API se um meeting_key específico foi fornecido
             sg_entries_to_process = []
             if meeting_key_param:
                 sg_entries_to_process = [
@@ -219,7 +194,6 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"Nenhum registro de starting grid para processar após filtragem (se aplicável). Encerrando."))
                 return
 
-            # Se o modo é 'U' e um meeting_key específico foi fornecido, delete os dados existentes para aquele meeting_key
             if mode_param == 'U' and meeting_key_param:
                 with transaction.atomic():
                     StartingGrid.objects.filter(
@@ -227,14 +201,10 @@ class Command(BaseCommand):
                     ).delete()
                     self.stdout.write(self.style.NOTICE(f"Registros de Starting Grid existentes deletados para Mtg {meeting_key_param} (modo U)."))
             
-            # Para o modo 'I', prepare um conjunto de PKs existentes para evitar chamadas duplicadas
             existing_pks_for_mode_I = set()
             if mode_param == 'I':
-                # Otimização para I: Pré-carrega as PKs existentes apenas para os meeting_keys que vamos processar
-                # Isso evita muitas consultas `exists()` individuais.
                 meeting_keys_in_batch = {entry.get('meeting_key') for entry in sg_entries_to_process if entry.get('meeting_key') is not None}
                 for m_key in meeting_keys_in_batch:
-                    # Fetch existing PKs only for relevant meeting_keys
                     existing_pks_for_mode_I.update(
                         StartingGrid.objects.filter(
                             meeting_key=m_key
@@ -243,12 +213,10 @@ class Command(BaseCommand):
 
 
             for i, sg_entry_dict in enumerate(sg_entries_to_process):
-                # Opcional: mostrar progresso a cada X registros
                 if (i + 1) % 100 == 0 or (i + 1) == len(sg_entries_to_process):
                     self.stdout.write(f"Processando registro {i+1}/{len(sg_entries_to_process)}...")
                 
                 try:
-                    # Se o modo é 'I' e este registro já existe no banco, pule
                     if mode_param == 'I':
                         current_pk_tuple = (
                             sg_entry_dict.get('meeting_key'),
@@ -257,14 +225,14 @@ class Command(BaseCommand):
                         )
                         if current_pk_tuple in existing_pks_for_mode_I:
                             sg_skipped_db += 1
-                            continue # Pula este registro, já existe e estamos em modo I
+                            continue
 
                     result = self.process_starting_grid_entry(sg_entry_dict, mode=mode_param)
                     if result == 'inserted':
                         sg_inserted_db += 1
                     elif result == 'updated':
                         sg_updated_db += 1
-                    elif result == 'skipped': # De conflito de PK no update_or_create ou outros skips
+                    elif result == 'skipped':
                         sg_skipped_db += 1
                     elif result == 'skipped_missing_data':
                         sg_skipped_missing_data += 1

@@ -9,14 +9,14 @@ import time
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, OperationalError, IntegrityError, transaction
 from django.conf import settings
-from django.db.models import Q # Importado para usar Q objects para filtragem
-from django.db.models.functions import Cast # Importado para tratamento de tipos no ORM
-from django.db.models import F, Case, When, Value, IntegerField # Importados para tratamento de tipos no ORM
+from django.db.models import Q
+from django.db.models.functions import Cast
+from django.db.models import F, Case, When, Value, IntegerField
 
-from core.models import Drivers, Sessions, SessionResult, Meetings # Adicionado Meetings para iterar por meeting_keys
+from core.models import Drivers, Sessions, SessionResult, Meetings
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
-import pytz
+
+from .token_manager import get_api_token
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -29,6 +29,7 @@ class Command(BaseCommand):
     API_MAX_RETRIES = 3
     API_RETRY_DELAY_SECONDS = 5
     BULK_SIZE = 5000
+    warnings_count = 0
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -52,16 +53,10 @@ class Command(BaseCommand):
         self.all_warnings_details.append(message)
         self.stdout.write(self.style.WARNING(message))
 
-    # get_config_value foi removido, pois não é mais usado.
-
     def get_meeting_session_driver_triplets_to_fetch(self, meeting_key_filter=None, mode='I'):
-        """
-        Identifica triplas (meeting_key, session_key, driver_number) a processar para SessionResult.
-        Considera meeting_key_filter e modo ('I' para apenas novos, 'U' para todos relevantes).
-        """
         self.stdout.write(self.style.MIGRATE_HEADING("Identificando triplas (meeting_key, session_key, driver_number) a processar para 'SessionResult'..."))
 
-        sessions_query = Sessions.objects.all() # Não filtra por session_type='Race'
+        sessions_query = Sessions.objects.all()
         if meeting_key_filter:
             sessions_query = sessions_query.filter(meeting_key=meeting_key_filter)
         
@@ -78,7 +73,6 @@ class Command(BaseCommand):
 
         triplets_to_process = set()
         if mode == 'I':
-            # Para 'I', precisamos subtrair o que já existe em SessionResult (considerando M,S,D)
             existing_sr_msd_triplets = set(
                 SessionResult.objects.filter(
                     meeting_key__in=[m for m,s,d in all_driver_triplets],
@@ -88,13 +82,13 @@ class Command(BaseCommand):
             )
             triplets_to_process = all_driver_triplets - existing_sr_msd_triplets
             self.stdout.write(f"Modo 'I': {len(triplets_to_process)} triplas (M,S,D) serão consideradas para busca de novos resultados (ainda não existentes).")
-        else: # mode == 'U'
+        else:
             triplets_to_process = all_driver_triplets
             self.stdout.write(f"Modo 'U': Todas as {len(triplets_to_process)} triplas (M,S,D) relevantes serão consideradas para atualização/inserção.")
 
         return sorted(list(triplets_to_process))
 
-    def fetch_session_results_data(self, session_key, use_token=True):
+    def fetch_session_results_data(self, session_key, api_token=None):
         if not session_key:
             self.add_warning("session_key deve ser fornecido para buscar dados de resultados de sessão da API.")
             return {"error_status": "InvalidParams", "error_message": "Missing session_key"}
@@ -103,14 +97,10 @@ class Command(BaseCommand):
 
         headers = {"Accept": "application/json"}
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
         else:
-            self.add_warning("Uso do token desativado. Requisição será feita sem Authorization.")
+            self.add_warning("Uso do token desativado ou token não disponível. Requisição será feita sem Authorization.")
 
         for attempt in range(self.API_MAX_RETRIES):
             try:
@@ -133,10 +123,6 @@ class Command(BaseCommand):
         return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
     def create_session_result_instance(self, sr_data_dict):
-        """
-        Constrói uma *nova* instância de modelo SessionResult a partir de um dicionário de dados da API.
-        Este método NÃO lida com INSERT/UPDATE, apenas com a construção do objeto.
-        """
         position = sr_data_dict.get('position')
         driver_number = sr_data_dict.get('driver_number')
         number_of_laps = sr_data_dict.get('number_of_laps')
@@ -163,7 +149,6 @@ class Command(BaseCommand):
         else:
             processed_gap_to_leader = [raw_gap_to_leader, None, None]
 
-        # Validação crítica para campos NOT NULL da PK
         if any(val is None for val in [meeting_key, session_key, driver_number]):
             missing_fields = [k for k,v in {'meeting_key': meeting_key, 'session_key': session_key, 'driver_number': driver_number}.items() if v is None]
             raise ValueError(f"Dados incompletos para SessionResult: faltam {missing_fields}. Dados: {sr_data_dict}")
@@ -196,32 +181,23 @@ class Command(BaseCommand):
 
         sr_found_api_total = 0
         sr_inserted_db = 0
-        sr_updated_db = 0 # No delete-then-insert, tudo é contado como inserido
-        sr_skipped_db = 0 # Usado apenas para mode 'I' com ignore_conflicts
+        sr_updated_db = 0
+        sr_skipped_db = 0
         sr_skipped_missing_data = 0
         api_call_errors = 0
 
-        # Inicializa meetings_to_process com uma lista vazia antes do try
         meetings_to_process = []
         total_meetings_to_process_for_summary = 0
 
         try:
+            api_token = None
             if use_api_token_flag:
-                try:
-                    self.stdout.write("Verificando e atualizando o token da API, se necessário...")
-                    update_api_token_if_needed()
-                    # Recarrega as variáveis de ambiente após possível atualização
-                    load_dotenv(dotenv_path=ENV_FILE_PATH, override=True)
-                    current_api_token = os.getenv('OPENF1_API_TOKEN')
-                    if not current_api_token:
-                        raise CommandError("Token da API (OPENF1_API_TOKEN) não disponível após verificação/atualização. Não é possível prosseguir com importação autenticada.")
-                    self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Falha ao verificar/atualizar o token da API: {e}. Prosseguindo sem usar o token da API."))
-                    use_api_token_flag = False
-
-            if not use_api_token_flag:
-                self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False ou falha na obtenção do token). Buscando dados sem autenticação."))
+                api_token = get_api_token(self)
+            
+            if not api_token and use_api_token_flag:
+                self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+                self.warnings_count += 1
+                use_api_token_flag = False
 
             if meeting_key_param:
                 meetings_to_process.append(meeting_key_param)
@@ -237,7 +213,6 @@ class Command(BaseCommand):
             for m_idx, current_meeting_key in enumerate(meetings_to_process):
                 self.stdout.write(self.style.MIGRATE_HEADING(f"\nIniciando processamento para Meeting Key: {current_meeting_key} ({m_idx + 1}/{total_meetings_to_process_for_summary})"))
 
-                # Obter as triplas (M,S,D) relevantes para o meeting_key atual
                 triplets_to_fetch_for_meeting = self.get_meeting_session_driver_triplets_to_fetch(
                     meeting_key_filter=current_meeting_key,
                     mode=mode_param
@@ -249,7 +224,6 @@ class Command(BaseCommand):
 
                 self.stdout.write(self.style.SUCCESS(f"Total de {len(triplets_to_fetch_for_meeting)} triplas (M,S,D) elegíveis para busca na API para Mtg {current_meeting_key}."))
 
-                # Agrupa as triplas por session_key para fazer chamadas de API eficientes
                 session_keys_to_fetch_api = sorted(list(set(s_key for _, s_key, _ in triplets_to_fetch_for_meeting)))
                 
                 for i, s_key in enumerate(session_keys_to_fetch_api):
@@ -257,7 +231,7 @@ class Command(BaseCommand):
                     
                     sr_data_from_api = self.fetch_session_results_data(
                         session_key=s_key,
-                        use_token=use_api_token_flag
+                        api_token=api_token
                     )
 
                     if isinstance(sr_data_from_api, dict) and "error_status" in sr_data_from_api:
@@ -272,13 +246,10 @@ class Command(BaseCommand):
                     sr_found_api_total += len(sr_data_from_api)
                     self.stdout.write(f"Encontrados {len(sr_data_from_api)} registros de resultados de sessão para Mtg {current_meeting_key}, Sess {s_key}. Processando...")
 
-                    # Coleta as instâncias de modelo a serem criadas para esta sessão
                     current_session_results_instances = []
                     
                     if mode_param == 'U':
                         with transaction.atomic():
-                            # Deleta todos os registros de resultado de sessão existentes para esta sessão (M,S)
-                            # Isso garante que a atualização seja um espelho exato do que a API retorna.
                             SessionResult.objects.filter(
                                 meeting_key=current_meeting_key,
                                 session_key=s_key
@@ -286,50 +257,42 @@ class Command(BaseCommand):
                             self.stdout.write(self.style.NOTICE(f"Registros de resultados de sessão existentes deletados para Mtg {current_meeting_key}, Sess {s_key} (modo U)."))
                     
                     for sr_entry_dict in sr_data_from_api:
-                        # Verifica se a tripla (M,S,D) do registro da API está na lista de triplas elegíveis para este meeting.
-                        # Isso é importante para evitar processar resultados de drivers/sessões que não deveriam ser importados (ex: por filtro de modo 'I').
                         current_api_triple = (
                             sr_entry_dict.get('meeting_key'),
                             sr_entry_dict.get('session_key'),
                             sr_entry_dict.get('driver_number')
                         )
                         if current_api_triple not in triplets_to_fetch_for_meeting:
-                            # Este caso pode ocorrer se a API retornar dados para drivers/sessões
-                            # que já existem no DB no modo 'I', mas não estão na lista `triplets_to_fetch_for_meeting`
-                            # porque já foram considerados "processados" (existentes no DB).
-                            # Ou se a API retornar dados para drivers que não estão na sua tabela `Drivers`.
                             self.add_warning(f"Registro de SR ignorado: tripla (Mtg {current_api_triple[0]}, Sess {current_api_triple[1]}, Driver {current_api_triple[2]}) da API não é elegível para este meeting/modo.")
-                            sr_skipped_db += 1 # Conta como pulado por não ser elegível
+                            sr_skipped_db += 1
                             continue
 
                         try:
-                            # Cria a instância do modelo SessionResult
                             sr_instance = self.create_session_result_instance(sr_entry_dict)
                             current_session_results_instances.append(sr_instance)
-                        except ValueError as val_e: # Erros de validação (dados ausentes/inválidos)
+                        except ValueError as val_e:
                             self.add_warning(f"Erro de validação ao construir instância de SR para Mtg {current_api_triple[0]}, Sess {current_api_triple[1]}, Driver {current_api_triple[2]}: {val_e}. Pulando este registro.")
                             sr_skipped_missing_data += 1
-                        except Exception as build_e: # Outros erros na construção
+                        except Exception as build_e:
                             self.add_warning(f"Erro inesperado ao construir instância de SR para Mtg {current_api_triple[0]}, Sess {current_api_triple[1]}, Driver {current_api_triple[2]}: {build_e}. Pulando este registro.")
                             sr_skipped_missing_data += 1
                     
                     if current_session_results_instances:
                         with transaction.atomic():
-                            # Usar bulk_create para inserir as instâncias
                             created_count = 0
                             skipped_conflict_count = 0
                             try:
                                 created_records = SessionResult.objects.bulk_create(
                                     current_session_results_instances,
                                     batch_size=self.BULK_SIZE,
-                                    ignore_conflicts=(mode_param == 'I') # Apenas ignora se for modo 'I'
+                                    ignore_conflicts=(mode_param == 'I')
                                 )
                                 created_count = len(created_records)
                                 if mode_param == 'I':
                                     skipped_conflict_count = len(current_session_results_instances) - created_count
                             except IntegrityError as ie:
                                 self.add_warning(f"IntegrityError durante bulk_create para Mtg {current_meeting_key}, Sess {s_key}: {ie}. Alguns registros podem ter sido ignorados.")
-                                api_call_errors += 1 # Contabilizar como erro de API que impediu inserção
+                                api_call_errors += 1
                                 continue
                             except Exception as bulk_e:
                                 self.add_warning(f"Erro inesperado durante bulk_create para Mtg {current_meeting_key}, Sess {s_key}: {bulk_e}. Pulando este lote.")
@@ -337,7 +300,7 @@ class Command(BaseCommand):
                                 continue
 
                             sr_inserted_db += created_count
-                            sr_skipped_db += skipped_conflict_count # Conflitos no modo 'I'
+                            sr_skipped_db += skipped_conflict_count
                         
                         self.stdout.write(self.style.SUCCESS(f"  {created_count} registros inseridos, {skipped_conflict_count} ignorados (conflito PK) para Mtg {current_meeting_key}, Sess {s_key}."))
                     else:
@@ -354,11 +317,9 @@ class Command(BaseCommand):
             raise CommandError(f"Erro inesperado durante a importação/atualização de Resultados de Sessão (ORM): {e}")
         finally:
             self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo Final do Processamento de Resultados de Sessão (ORM) ---"))
-            self.stdout.write(self.style.SUCCESS(f"Total de Meetings processados: {total_meetings_to_process_for_summary}"))
+            self.stdout.write(self.style.SUCCESS(f"Total de Meetings processados: {total_meetings_to_process_for_summary if 'total_meetings_to_process_for_summary' in locals() else 0}"))
             self.stdout.write(self.style.SUCCESS(f"Registros de SR encontrados na API (total): {sr_found_api_total}"))
             self.stdout.write(self.style.SUCCESS(f"Registros novos inseridos no DB: {sr_inserted_db}"))
-            # sr_updated_db não é usado explicitamente com a estratégia delete-then-bulk_create,
-            # pois tudo é reinserido no modo U. Você pode considerá-lo 0 ou o total de inseridos no modo U.
             self.stdout.write(self.style.SUCCESS(f"Registros existentes atualizados no DB: {sr_updated_db}"))
             self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB em modo 'I'): {sr_skipped_db}"))
             if sr_skipped_missing_data > 0:
@@ -366,7 +327,7 @@ class Command(BaseCommand):
             if api_call_errors > 0:
                 self.stdout.write(self.style.ERROR(f"Erros em chamadas à API: {api_call_errors}"))
             self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
-            if self.all_warnings_details:
+            if hasattr(self, 'all_warnings_details') and self.all_warnings_details:
                 self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
                 for warn_msg in self.all_warnings_details:
                     self.stdout.write(self.style.WARNING(f" - {warn_msg}"))

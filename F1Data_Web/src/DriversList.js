@@ -35,7 +35,7 @@ function DriversList({ sessionKey, onDriverSelect, selectedDriverNumber }) {
       }
     };
     fetchDrivers();
-  }, [sessionKey, API_BASE_URL]);
+  }, [sessionKey]);
 
   // INÍCIO DA CORREÇÃO: Passa o OBJETO COMPLETO do driver
   const handleDriverClick = (driver) => {

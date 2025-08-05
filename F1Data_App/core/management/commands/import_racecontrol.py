@@ -4,15 +4,16 @@ import requests
 import json
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction, IntegrityError, OperationalError
 from django.conf import settings
 
-from core.models import Sessions, RaceControl # Adicionado Sessions
+from core.models import Sessions, RaceControl
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
+
+from .token_manager import get_api_token
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -39,14 +40,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING(message))
 
     def get_meeting_session_pairs_to_fetch(self, meeting_key_filter=None, mode='I'):
-        """
-        Obtém todos os pares (meeting_key, session_key) da tabela 'Sessions'
-        para buscar dados de Race Control.
-        Agora, considera *todos* os tipos de sessão.
-        """
         self.stdout.write(self.style.MIGRATE_HEADING("Obtendo pares (meeting_key, session_key) para buscar Race Control..."))
         
-        # Obter todas as sessões (removido o filtro session_type='Race')
         sessions_query = Sessions.objects.all()
         if meeting_key_filter:
             sessions_query = sessions_query.filter(meeting_key=meeting_key_filter)
@@ -56,7 +51,6 @@ class Command(BaseCommand):
 
         pairs_to_process = set()
         if mode == 'I':
-            # Para 'I', precisamos subtrair o que já existe em RaceControl (considerando M,S)
             existing_rc_ms_pairs = set(
                 RaceControl.objects.filter(
                     meeting_key__in=[m for m,s in all_sessions_pairs],
@@ -65,27 +59,23 @@ class Command(BaseCommand):
             )
             pairs_to_process = all_sessions_pairs - existing_rc_ms_pairs
             self.stdout.write(f"Modo 'I': {len(pairs_to_process)} pares (M,S) serão considerados para busca de novos Race Control (ainda não existentes).")
-        else: # mode == 'U'
+        else:  # mode == 'U'
             pairs_to_process = all_sessions_pairs
             self.stdout.write(f"Modo 'U': Todas as {len(pairs_to_process)} pares (M,S) relevantes serão consideradas para atualização/inserção.")
 
-        # Ordena para processamento consistente
         return sorted(list(pairs_to_process))
 
-    def fetch_race_control_data(self, session_key, use_token=True):
+    def fetch_race_control_data(self, session_key, api_token=None):
         url = f"{self.API_URL}?session_key={session_key}"
         headers = {"Accept": "application/json"}
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.add_warning(f"Token da API (OPENF1_API_TOKEN) não encontrado. Requisição para Sess {session_key} será feita sem Authorization.")
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
         else:
-            self.add_warning(f"Uso do token desativado. Requisição para Sess {session_key} será feita sem Authorization.")
+            self.add_warning(f"Uso do token desativado ou token não disponível. Requisição para Sess {session_key} será feita sem Authorization.")
 
         for attempt in range(self.API_MAX_RETRIES):
+            response = None
             try:
                 response = requests.get(url, headers=headers)
                 response.raise_for_status()
@@ -106,14 +96,30 @@ class Command(BaseCommand):
         return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
     def process_race_control_entry(self, rc_data_dict, mode):
-        def to_datetime(val):
-            return datetime.fromisoformat(val.replace("Z", "+00:00")) if val else None
+        # CORREÇÃO AQUI: Garante que a data seja timezone-aware (UTC) sem alterar o valor da API
+        def to_datetime_aware(val):
+            if not val:
+                return None
+            try:
+                original = val
+                if val.endswith("Z"):
+                    val = val[:-1] + "+00:00"
+                dt = datetime.fromisoformat(val)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                    tz_info_desc = "assumido UTC (era naive)"
+                else:
+                    dt = dt.astimezone(timezone.utc)
+                    tz_info_desc = f"convertido para UTC (original tzinfo={dt.tzinfo})"
+                return dt
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f"[DEBUG timezone] falha ao parsear '{val}': {e}"))
+                return None
 
         meeting_key = rc_data_dict.get("meeting_key")
         session_key = rc_data_dict.get("session_key")
         date_str = rc_data_dict.get("date")
         
-        # O campo 'date' é crucial para a PK e deve ser validado
         if any(val is None for val in [meeting_key, session_key, date_str]):
             missing_fields = [k for k,v in {
                 'meeting_key': meeting_key, 'session_key': session_key, 'date': date_str
@@ -121,7 +127,7 @@ class Command(BaseCommand):
             self.add_warning(f"Race Control ignorado: dados obrigatórios ausentes para Mtg {meeting_key}, Sess {session_key}. Faltando: {missing_fields}")
             return 'skipped_missing_data'
 
-        date_obj = to_datetime(date_str)
+        date_obj = to_datetime_aware(date_str)
         if date_obj is None:
             self.add_warning(f"Formato de data inválido para Race Control (Mtg {meeting_key}, Sess {session_key}): '{date_str}'.")
             return 'skipped_invalid_date'
@@ -134,33 +140,39 @@ class Command(BaseCommand):
             "message": rc_data_dict.get("message"),
             "scope": rc_data_dict.get("scope"),
             "sector": rc_data_dict.get("sector"),
-            "status": rc_data_dict.get("status"),
         }
 
         try:
             if mode == 'U':
-                obj, created = RaceControl.objects.update_or_create(
-                    meeting_key=meeting_key,
-                    session_key=session_key,
-                    date=date_obj, # 'date' é parte da PK
-                    defaults=defaults
-                )
-                return 'inserted' if created else 'updated'
-            else: # mode == 'I'
-                if RaceControl.objects.filter(
-                    meeting_key=meeting_key,
-                    session_key=session_key,
-                    date=date_obj
-                ).exists():
+                try:
+                    obj = RaceControl.objects.get(
+                        meeting_key=meeting_key,
+                        session_key=session_key,
+                        session_date=date_obj,
+                    )
+                    for key, value in defaults.items():
+                        setattr(obj, key, value)
+                    obj.save()
+                    return 'updated'
+                except RaceControl.DoesNotExist:
+                    RaceControl.objects.create(
+                        meeting_key=meeting_key,
+                        session_key=session_key,
+                        session_date=date_obj,
+                        **defaults
+                    )
+                    return 'inserted'
+            else:  # mode == 'I'
+                try:
+                    RaceControl.objects.create(
+                        meeting_key=meeting_key,
+                        session_key=session_key,
+                        session_date=date_obj,
+                        **defaults
+                    )
+                    return 'inserted'
+                except IntegrityError:
                     return 'skipped'
-                
-                RaceControl.objects.create(
-                    meeting_key=meeting_key,
-                    session_key=session_key,
-                    date=date_obj,
-                    **defaults
-                )
-                return 'inserted'
         except IntegrityError:
             self.add_warning(f"IntegrityError ao processar Race Control (Mtg {meeting_key}, Sess {session_key}, Date {date_str}). Provavelmente duplicata. Ignorando.")
             return 'skipped'
@@ -193,21 +205,14 @@ class Command(BaseCommand):
 
 
         try:
+            api_token = None
             if use_api_token_flag:
-                try:
-                    self.stdout.write("Verificando e atualizando o token da API, se necessário...")
-                    update_api_token_if_needed()
-                    load_dotenv(dotenv_path=ENV_FILE_PATH, override=True)
-                    current_api_token = os.getenv('OPENF1_API_TOKEN')
-                    if not current_api_token:
-                        raise CommandError("Token da API (OPENF1_API_TOKEN) não disponível após verificação/atualização. Não é possível prosseguir com importação autenticada.")
-                    self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Falha ao verificar/atualizar o token da API: {e}. Prosseguindo sem usar o token da API."))
-                    use_api_token_flag = False
-
-            if not use_api_token_flag:
-                self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False ou falha na obtenção do token). Buscando dados sem autenticação."))
+                api_token = get_api_token(self)
+            
+            if not api_token and use_api_token_flag:
+                self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+                self.warnings_count += 1
+                use_api_token_flag = False
 
             pairs_to_fetch = self.get_meeting_session_pairs_to_fetch(
                 meeting_key_filter=meeting_key_param,
@@ -225,7 +230,7 @@ class Command(BaseCommand):
 
                 rc_data_from_api = self.fetch_race_control_data(
                     session_key=s_key,
-                    use_token=use_api_token_flag
+                    api_token=api_token
                 )
 
                 if isinstance(rc_data_from_api, dict) and "error_status" in rc_data_from_api:
@@ -238,10 +243,7 @@ class Command(BaseCommand):
                     continue
 
                 rc_found_api_total += len(rc_data_from_api)
-                self.stdout.write(f"Encontrados {len(rc_data_from_api)} registros de Race Control para Mtg {m_key}, Sess {s_key}. Processando...")
 
-                # Em modo 'U', a melhor estratégia para 'race_control' é deletar todos os registros existentes para essa (M,S)
-                # e depois inserir os novos, garantindo consistência com a API.
                 if mode_param == 'U':
                     with transaction.atomic():
                         RaceControl.objects.filter(
@@ -290,7 +292,7 @@ class Command(BaseCommand):
             if api_call_errors > 0:
                 self.stdout.write(self.style.ERROR(f"Erros em chamadas à API: {api_call_errors}"))
             self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
-            if self.all_warnings_details:
+            if hasattr(self, 'all_warnings_details') and self.all_warnings_details:
                 self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
                 for warn_msg in self.all_warnings_details:
                     self.stdout.write(self.style.WARNING(f" - {warn_msg}"))

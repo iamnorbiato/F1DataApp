@@ -15,7 +15,7 @@ class MeetingFilterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Meetings
-        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key', 'meeting_official_name', 'display_name']
+        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key', 'meeting_official_name', 'display_name', 'date_start']
 
     def get_display_name(self, obj):
         if isinstance(obj, Model):
@@ -34,22 +34,6 @@ class MeetingFilterSerializer(serializers.ModelSerializer):
             return obj.meeting_official_name or obj.meeting_name
         else:
             return obj.get('meeting_official_name', obj.get('meeting_name', 'N/A'))
-
-#Serializer para Meetings
-class MeetingSerializer(serializers.ModelSerializer):
-    display_name = serializers.SerializerMethodField()
-    meeting_official_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Meetings
-        fields = ['meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key', 'meeting_official_name', 'display_name']
-
-    def get_display_name(self, obj):
-        return f"{obj.country_name} - {obj.meeting_name} - {obj.circuit_short_name}"
-
-    def get_meeting_official_name(self, obj):
-        return obj.meeting_official_name or obj.meeting_name
-
 
 # Serializer para sessões
 class SessionSerializer(serializers.ModelSerializer):
@@ -168,6 +152,7 @@ class CarDataSerializer(serializers.ModelSerializer):
         
 #Serializer para Location
 class LocationSerializer(serializers.ModelSerializer):
+    date = serializers.DateTimeField(default_timezone=None)
     class Meta:
         model = Location
         fields = ['session_key', 'driver_number', 'date', 'z', 'x', 'y']
@@ -178,5 +163,12 @@ class CircuitSerializer(serializers.ModelSerializer):
         model = Circuit
         fields = ['circuitid','circuitref','name','location','country','lat','lng','alt','url']
 
+# Serializer para o novo endpoint de Min/Max de datas
+class MinMaxDateSerializer(serializers.Serializer):
+    min_date = serializers.DateTimeField(default_timezone=None)
+    max_date = serializers.DateTimeField(default_timezone=None)
+    # Note: default_timezone=None é para desserialização (leitura),
+    # mas ajuda a documentar a intenção do campo. Para serialização (saída),
+    # DRF com USE_TZ=True serializará datetimes aware em ISO.
 
         

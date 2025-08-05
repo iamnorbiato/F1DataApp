@@ -1139,7 +1139,7 @@ a.header-nav-item:hover {
 .telemetry-display-panel {
   background-color: var(--secondary-dark-bg);
   border-radius: 12px;
-  box-shadow: 0 4px 12px var(--shadow-color);
+  /*box-shadow: 0 4px 12px var(--shadow-color); */
   padding: 10px;
   color: var(--text-light);
   display: flex;
@@ -1155,6 +1155,18 @@ a.header-nav-item:hover {
   margin-right: auto;
 }
 
+.telemetry-display-panel h2 {
+  text-align: center;
+  color: var(--accent-green);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.2em; 
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 5px;
+  font-family: 'Formula1 Display Bold', sans-serif;
+}
+
+
 /* Estilos para os controles de navegação do TrackMap */
 .track-map-controls {
   display: flex;
@@ -1164,7 +1176,7 @@ a.header-nav-item:hover {
   margin-top: 10px;
   padding: 5px 0;
   border-top: 1px solid var(--border-color);
-  height: 60vh
+  height: auto
 }
 
 .track-map-nav-button {
@@ -1172,11 +1184,11 @@ a.header-nav-item:hover {
   color: var(--text-light);
   border: none;
   border-radius: 5px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   cursor: pointer;
   transition: background-color 0.2s ease;
   font-family: 'Formula1 Display Regular', sans-serif;
-  font-size: 0.9em;
+  font-size: 0.8em;
 }
 
 .track-map-nav-button:hover:not(:disabled) {
@@ -1192,7 +1204,7 @@ a.header-nav-item:hover {
 .track-map-current-time {
   font-family: 'Formula1 Display Bold', sans-serif;
   color: var(--accent-green);
-  font-size: 1.1em;
+  font-size: 0.8em;
   min-width: 100px;
   text-align: center;
 }
@@ -1277,19 +1289,25 @@ a.header-nav-item:hover {
 
 /* Posicionamento do TrackMap para Telemetria - Conforme a imagem */
 .telemetry-layout-container .telemetry-display-panel {
-  grid-column: 1 / -1; /* Ocupa todas as 3 colunas */
-  grid-row: 2 / 3;    /* E fica na SEGUNDA linha (abaixo do trio superior) */
-  
-  /* Largura: Metade da tela na horizontal */
-  /* '20px' é o padding total da main-content-area (10px esq + 10px dir).
-     '2 * 5px' é o gap entre as colunas (5px entre C1-C2 e 5px entre C2-C3). */
-  max-width: calc(50vw - 20px - 2 * 5px); 
-  height: 60vh; /* Altura conforme pedido (MeetingsList + 50%) */
-  margin-left: auto; /* Centraliza o painel dentro da área que ele ocupa no grid */
-  margin-right: auto;
+  /* Propriedades de cor, borda, sombra, padding, display, flex-direction, flex-grow, min-width, overflow: */
+  background-color: var(--secondary-dark-bg);
+  border-radius: 12px;
+  padding: 10px; /* Mantém o padding interno do painel */
+  color: var(--text-light);
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1; 
+  min-width: 400px;
+  height: 70vh; /* Certifica que a altura é auto e não fixa */
+  max-height: 90vh; /* Limite máximo */
+  overflow: hidden;
+
+  /* === INÍCIO DAS REGRAS AGRESSIVAS DE POSICIONAMENTO E LARGURA === */
+  grid-column-start: 1; /* Explicitamente iniciar na linha 1 */
+  grid-column-end: 3;  /* Explicitamente terminar na última linha (span all) */
+  grid-row: 2 / 3;      /* Na segunda linha */
+
+  /* Resetar quaisquer margens ou alinhamentos automáticos que possam estar interferindo */
+  margin: 0 !important; /* Força margem zero e anula auto */
+  width: auto !important; /* Garante que ele preencha a coluna do grid */
 }
-
-/* RaceControlPanel no modo Telemetria NÃO APARECE (visibilidade controlada no App.js) */
-/* Não precisa de regras de grid aqui para ele neste layout, pois ele não é renderizado */
-
-/* FIM: NOVAS CLASSES DE LAYOUT CONDICIONAL */

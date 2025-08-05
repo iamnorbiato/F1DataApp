@@ -20,7 +20,7 @@ function MeetingsList({ selectedYear, onMeetingSelect, selectedMeetingKey }) {
       setError(null);   
       try {
         console.log(`Buscando meetings para o ano ${selectedYear} da API...`);
-        const response = await fetch(`${API_BASE_URL}/api/meetings-by-year/?year=${selectedYear}`);
+        const response = await fetch(`${API_BASE_URL}/api/filters/meetings/?year=${selectedYear}`);
         if (!response.ok) {
           throw new Error(`Erro ao buscar meetings: ${response.status}`);
         }
@@ -36,7 +36,7 @@ function MeetingsList({ selectedYear, onMeetingSelect, selectedMeetingKey }) {
     };
 
     fetchMeetings();
-  }, [selectedYear, API_BASE_URL]);
+  }, [selectedYear]);
 
   if (loading) {
     return <p>Carregando corridas de {selectedYear}...</p>;

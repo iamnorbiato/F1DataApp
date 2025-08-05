@@ -11,8 +11,9 @@ from django.conf import settings
 
 from core.models import Sessions, Meetings
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
-import pytz
+
+# Importe o novo módulo de gerenciamento de token
+from .token_manager import get_api_token
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -62,7 +63,7 @@ class Command(BaseCommand):
         return session_pairs
 
 
-    def fetch_sessions_data(self, meeting_key=None, use_token=True):
+    def fetch_sessions_data(self, meeting_key=None, api_token=None):
         url = self.API_URL
         if meeting_key:
             url = f"{self.API_URL}?meeting_key={meeting_key}"
@@ -71,14 +72,10 @@ class Command(BaseCommand):
             "Accept": "application/json"
         }
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.stdout.write(self.style.WARNING("Token da API (OPENF1_API_TOKEN) não encontrado em env. Requisição será feita sem Authorization."))
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
         else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado. Requisição será feita sem Authorization."))
+            self.stdout.write(self.style.NOTICE("Uso do token desativado ou token não disponível. Requisição será feita sem Authorization."))
 
         self.stdout.write(self.style.MIGRATE_HEADING(f"Buscando dados de sessões de evento da API: {url}"))
         try:
@@ -209,22 +206,14 @@ class Command(BaseCommand):
 
 
         try:
+            api_token = None
             if use_api_token_flag:
-                try:
-                    self.stdout.write("Verificando e atualizando o token da API, se necessário...")
-                    update_api_token_if_needed()
-                    # >>> CORREÇÃO AQUI: Recarrega as variáveis de ambiente após possível atualização <<<
-                    load_dotenv(dotenv_path=ENV_FILE_PATH, override=True) # Recarrega para obter o token mais recente
-                    current_api_token = os.getenv('OPENF1_API_TOKEN')
-                    if not current_api_token:
-                        raise CommandError("Token da API (OPENF1_API_TOKEN) não disponível após verificação/atualização. Não é possível prosseguir com importação autenticada.")
-                    self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Falha ao verificar/atualizar o token da API: {e}. Prosseguindo sem usar o token da API."))
-                    use_api_token_flag = False
-
-            if not use_api_token_flag:
-                self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False ou falha na obtenção do token). Buscando dados sem autenticação."))
+                api_token = get_api_token(self)
+            
+            if not api_token and use_api_token_flag:
+                self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+                self.warnings_count += 1
+                use_api_token_flag = False
 
             meetings_to_process_api_calls = []
             if meeting_key_param:
@@ -242,10 +231,10 @@ class Command(BaseCommand):
 
             all_sessions_from_api = []
             if meeting_key_param or (mode_param == 'U' and not meetings_to_process_api_calls):
-                all_sessions_from_api = self.fetch_sessions_data(meeting_key=meeting_key_param, use_token=use_api_token_flag)
+                all_sessions_from_api = self.fetch_sessions_data(meeting_key=meeting_key_param, api_token=api_token)
             elif mode_param == 'I' and meetings_to_process_api_calls:
                 for m_key in meetings_to_process_api_calls:
-                    sessions_for_key = self.fetch_sessions_data(meeting_key=m_key, use_token=use_api_token_flag)
+                    sessions_for_key = self.fetch_sessions_data(meeting_key=m_key, api_token=api_token)
                     all_sessions_from_api.extend(sessions_for_key)
                     if self.API_DELAY_SECONDS > 0:
                         time.sleep(self.API_DELAY_SECONDS)

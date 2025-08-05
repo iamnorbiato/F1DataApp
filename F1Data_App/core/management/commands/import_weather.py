@@ -10,10 +10,11 @@ from django.db import connection, OperationalError, IntegrityError, transaction
 from django.conf import settings
 
 # Importa os modelos necessários
-from core.models import Sessions, Weather
+from core.models import Sessions, Weather, Meetings
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
-import pytz # Para manipulação de fusos horários
+
+# Importe o novo módulo de gerenciamento de token
+from .token_manager import get_api_token
 
 ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
 
@@ -25,13 +26,14 @@ class Command(BaseCommand):
     API_DELAY_SECONDS = 0.2
     API_MAX_RETRIES = 3
     API_RETRY_DELAY_SECONDS = 5
+    warnings_count = 0
 
     def add_arguments(self, parser):
-        # Adiciona o argumento opcional --meeting_key
         parser.add_argument('--meeting_key', type=int, help='Especifica um Meeting Key para importar/atualizar dados de clima (opcional).')
+        parser.add_argument('--session_key', type=int, help='Especifica um Session Key para importar/atualizar dados de clima (opcional).')
+        parser.add_argument('--mode', choices=['I', 'U'], default='I', help='Modo de operação: I=Insert apenas (padrão), U=Update (atualiza existentes e insere novos).')
 
     def add_warning(self, message):
-        # Inicializa se não estiverem inicializados (para segurança, embora handle os inicialize)
         if not hasattr(self, 'warnings_count'):
             self.warnings_count = 0
             self.all_warnings_details = []
@@ -39,25 +41,21 @@ class Command(BaseCommand):
         self.all_warnings_details.append(message)
         self.stdout.write(self.style.WARNING(message))
 
-    def get_meeting_session_pairs_from_sessions(self, meeting_key_filter=None):
-        """
-        Obtém todos os pares (meeting_key, session_key) da tabela 'sessions'.
-        Pode filtrar por um meeting_key específico.
-        """
+    def get_meeting_session_pairs_to_fetch(self, meeting_key_filter=None, session_key_filter=None):
         self.stdout.write(self.style.MIGRATE_HEADING("Obtendo pares (meeting_key, session_key) da tabela 'sessions'..."))
+        
         query = Sessions.objects.all()
         if meeting_key_filter:
             query = query.filter(meeting_key=meeting_key_filter)
+        if session_key_filter:
+            query = query.filter(session_key=session_key_filter)
 
         session_pairs = sorted(list(query.values_list('meeting_key', 'session_key')))
 
-        self.stdout.write(f"Encontrados {len(session_pairs)} pares (meeting_key, session_key) na tabela 'sessions'{' para o meeting_key especificado' if meeting_key_filter else ''}.")
+        self.stdout.write(f"Encontrados {len(session_pairs)} pares (meeting_key, session_key) na tabela 'sessions'{' para o meeting_key especificado' if meeting_key_filter else ''}{' e session_key' if session_key_filter else ''}.")
         return session_pairs
 
-    def fetch_weather_data(self, meeting_key, session_key, use_token=True):
-        """
-        Busca os dados de clima da API OpenF1 para um par (meeting_key, session_key) específico.
-        """
+    def fetch_weather_data(self, meeting_key, session_key, api_token=None):
         if not meeting_key or not session_key:
             raise CommandError("meeting_key e session_key devem ser fornecidos para buscar dados de weather da API.")
 
@@ -67,16 +65,11 @@ class Command(BaseCommand):
             "Accept": "application/json"
         }
 
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.add_warning("Token da API (OPENF1_API_TOKEN) não encontrado em env. Requisição para "
-                                 f"Mtg {meeting_key}, Sess {session_key} será feita sem Authorization.")
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
         else:
-            self.add_warning("Uso do token desativado. Requisição para "
-                             f"Mtg {meeting_key}, Sess {session_key} será feita sem Authorization.")
+            self.add_warning(f"Uso do token desativado ou token não disponível. Requisição para "
+                                 f"Mtg {meeting_key}, Sess {session_key} será feita sem Authorization.")
 
         for attempt in range(self.API_MAX_RETRIES):
             try:
@@ -107,10 +100,20 @@ class Command(BaseCommand):
             if not isinstance(weather_data, dict):
                 raise ValueError(f"Dados de weather inesperados: esperado um dicionário, mas recebeu {type(weather_data)}: {weather_data}")
 
-            # Mapeamento e tratamento de dados da API para as colunas do DB
             session_key = weather_data.get('session_key')
             meeting_key = weather_data.get('meeting_key')
-            session_date_str = weather_data.get('date') # O JSON usa 'date'
+            session_date_str = weather_data.get('date')
+
+            if any(val is None for val in [session_key, meeting_key, session_date_str]):
+                return 'skipped_missing_data'
+
+            session_date_obj = None
+            if session_date_str:
+                try:
+                    session_date_obj = datetime.fromisoformat(session_date_str).astimezone(timezone.utc)
+                except ValueError:
+                    self.add_warning(f"Formato de data inválido '{session_date_str}' para weather (Mtg {meeting_key}, Sess {session_key}).")
+                    return 'skipped_invalid_date'
 
             wind_direction = weather_data.get('wind_direction')
             air_temperature = weather_data.get('air_temperature')
@@ -119,25 +122,11 @@ class Command(BaseCommand):
             rainfall = weather_data.get('rainfall')
             wind_speed = weather_data.get('wind_speed')
             track_temperature = weather_data.get('track_temperature')
-
-            # Validação crítica para campos NOT NULL na PK
-            if any(val is None for val in [session_key, meeting_key, session_date_str]):
-                missing_fields = [k for k,v in {'session_key': session_key, 'meeting_key': meeting_key, 'date': session_date_str}.items() if v is None]
-                return 'skipped_missing_data'
-
-            session_date_obj = None
-            if session_date_str:
-                try:
-                    session_date_obj = datetime.fromisoformat(session_date_str.replace('Z', '+00:00'))
-                except ValueError:
-                    self.add_warning(f"Formato de data inválido '{session_date_str}' para weather (Mtg {meeting_key}, Sess {session_key}).")
-                    return 'skipped_invalid_date'
-
-            # Usa update_or_create para inserir ou atualizar
+            
             obj, created = Weather.objects.update_or_create(
                 session_key=session_key,
                 meeting_key=meeting_key,
-                session_date=session_date_obj, # Mapeia 'date' da API para 'session_date' do DB
+                session_date=session_date_obj,
                 defaults={
                     'wind_direction': wind_direction,
                     'air_temperature': air_temperature,
@@ -156,19 +145,23 @@ class Command(BaseCommand):
 
 
     def handle(self, *args, **options):
-        # AQUI: load_dotenv inicial para carregar configs do ambiente inicial
         load_dotenv(dotenv_path=ENV_FILE_PATH)
 
         self.warnings_count = 0
         self.all_warnings_details = []
 
         meeting_key_param = options.get('meeting_key')
+        session_key_param = options.get('session_key')
+        mode_param = options.get('mode')
 
-        # Use_api_token_flag lida abaixo, após possível atualização de token
+        # === Validação da nova regra de negócio ===
+        if session_key_param and not meeting_key_param:
+            raise CommandError("Erro: Se 'session_key' for fornecido, 'meeting_key' também deve ser fornecido.")
+
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
 
         self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação/atualização de Weather (ORM)..."))
-        self.stdout.write(f"Parâmetros recebidos: meeting_key={meeting_key_param if meeting_key_param else 'Nenhum'}")
+        self.stdout.write(f"Parâmetros recebidos: meeting_key={meeting_key_param if meeting_key_param else 'Nenhum'}, session_key={session_key_param if session_key_param else 'Nenhum'}")
 
         weather_entries_found_api = 0
         weather_entries_inserted_db = 0
@@ -179,27 +172,20 @@ class Command(BaseCommand):
 
 
         try:
+            api_token = None
             if use_api_token_flag:
-                try:
-                    self.stdout.write("Verificando e atualizando o token da API, se necessário...")
-                    update_api_token_if_needed()
-                    # >>> CORREÇÃO CRÍTICA AQUI: Recarrega as variáveis de ambiente após possível atualização <<<
-                    # Isso garante que os.getenv() abaixo leia o TOKEN NOVO do arquivo env.cfg
-                    load_dotenv(dotenv_path=ENV_FILE_PATH, override=True)
-                    current_api_token = os.getenv('OPENF1_API_TOKEN')
-                    if not current_api_token:
-                        raise CommandError("Token da API (OPENF1_API_TOKEN) não disponível após verificação/atualização. Não é possível prosseguir com importação autenticada.")
-                    self.stdout.write(self.style.SUCCESS("Token da API verificado/atualizado com sucesso."))
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f"Falha ao verificar/atualizar o token da API: {e}. Prosseguindo sem usar o token da API."))
-                    use_api_token_flag = False # Desativa o uso do token se houve falha na atualização
+                api_token = get_api_token(self)
+            
+            if not api_token and use_api_token_flag:
+                self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+                self.warnings_count += 1
+                use_api_token_flag = False
 
-            if not use_api_token_flag:
-                self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False ou falha na obtenção do token). Buscando dados sem autenticação."))
-
-            # Determina quais pares (meeting_key, session_key) devem ser processados
-            # Buscará todos os pares da tabela Sessions, opcionalmente filtrando por meeting_key
-            pairs_to_fetch = self.get_meeting_session_pairs_from_sessions(meeting_key_filter=meeting_key_param)
+            # Determina os pares a serem processados com a nova lógica
+            pairs_to_fetch = self.get_meeting_session_pairs_to_fetch(
+                meeting_key_filter=meeting_key_param,
+                session_key_filter=session_key_param
+            )
 
             if not pairs_to_fetch:
                 self.stdout.write(self.style.NOTICE("Nenhum par (meeting_key, session_key) encontrado para buscar dados de clima. Encerrando."))
@@ -210,10 +196,7 @@ class Command(BaseCommand):
             for i, (meeting_key, session_key) in enumerate(pairs_to_fetch):
                 self.stdout.write(f"Buscando e processando clima para par {i+1}/{len(pairs_to_fetch)}: Mtg {meeting_key}, Sess {session_key}...")
 
-                # Garante que api_token seja lido novamente para cada chamada, se necessário,
-                # embora o load_dotenv(override=True) acima já garanta que os.getenv pegue o mais novo.
-                # A variável 'use_api_token_flag' já reflete o status correto.
-                weather_data_from_api = self.fetch_weather_data(meeting_key=meeting_key, session_key=session_key, use_token=use_api_token_flag)
+                weather_data_from_api = self.fetch_weather_data(meeting_key=meeting_key, session_key=session_key, api_token=api_token)
 
                 if isinstance(weather_data_from_api, dict) and "error_status" in weather_data_from_api:
                     api_call_errors += 1
@@ -265,7 +248,7 @@ class Command(BaseCommand):
             if api_call_errors > 0:
                 self.stdout.write(self.style.ERROR(f"Erros em chamadas à API: {api_call_errors}"))
             self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
-            if self.all_warnings_details:
+            if hasattr(self, 'all_warnings_details') and self.all_warnings_details:
                 self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
                 for warn_msg in self.all_warnings_details:
                     self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
