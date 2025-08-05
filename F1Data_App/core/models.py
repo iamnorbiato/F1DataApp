@@ -42,6 +42,8 @@ class Sessions(models.Model):
         managed = False
         # 'unique_together' só para complementar se quiser manter unicidade total
         unique_together = (('meeting_key', 'session_key', 'session_name'),)
+        ordering = ['date_start']  # Ordena por data de início
+
     def __str__(self):
         return f"Session {self.session_name} (meeting_key={self.meeting_key})"
     
@@ -87,7 +89,7 @@ class RaceControl(models.Model):
         db_table = 'racecontrol'
         managed = False
         unique_together = (
-            ('meeting_key', 'session_key', 'driver_number', 'lap_number', 'category', 'flag', 'sector'),
+            ('meeting_key', 'session_key', 'driver_number', 'session_date', 'lap_number', 'category', 'flag', 'sector'),
         )
         # verbose_name e verbose_name_plural foram removidos
         ordering = ['session_date']
@@ -181,8 +183,8 @@ class Intervals(models.Model):
     meeting_key = models.IntegerField()
     driver_number = models.IntegerField()
     date = models.DateTimeField() # NOT NULL na PK composta
-    gap_to_leader = models.CharField(max_length=12, null=True, blank=True)
-    interval_value = models.CharField(max_length=12, db_column='interval', null=True, blank=True)
+    gap_to_leader = models.CharField(max_length=20, null=True, blank=True)
+    interval_value = models.CharField(max_length=20, db_column='interval', null=True, blank=True)
     class Meta:
         managed = False
         db_table = 'intervals'
@@ -386,7 +388,7 @@ class Circuit(models.Model):
 
     class Meta:
         managed = False  # Django não controla criação/alteração da tabela
-        db_table = 'f1data"."circuits'  # schema + tabela
+        db_table = 'circuits'  # schema + tabela
         unique_together = (('circuitref',),)  # índice único para circuitref (opcional, já tem unique=True)
 
     def __str__(self):

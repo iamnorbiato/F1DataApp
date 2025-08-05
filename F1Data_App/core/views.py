@@ -8,11 +8,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 from datetime import datetime, timedelta, timezone
-from django.utils import timezone as django_timezone
+from django.utils.timezone import make_aware, is_naive, get_current_timezone
 
-from django.db.models import F, Case, When, Value, IntegerField
+#from django.utils import timezone as django_timezone
+
+from django.db.models import F, Case, When, Value, IntegerField, Min, Max
 from django.db.models.functions import Cast
 import math
+from django.http import JsonResponse
+from django.views import View
 from django.contrib.postgres.fields import ArrayField
 
 from rest_framework.exceptions import ValidationError
@@ -28,7 +32,7 @@ from .serializers import (
     SessionResultSerializer,
     LapsSerializer, PitSerializer, StintSerializer, PositionSerializer,
     IntervalsSerializer, RaceControlSerializer, TeamRadioSerializer, CarDataSerializer, LocationSerializer,
-    MeetingSerializer, CircuitSerializer
+    CircuitSerializer, MinMaxDateSerializer, PitSerializer
 )
 
 # --- CONSTANTES GLOBAIS PARA ORDENAÇÃO ---
@@ -58,9 +62,9 @@ class MeetingFilterAPIView(APIView):
         if selected_year:
             try:
                 selected_year = int(selected_year)
-                meetings_queryset = Meetings.objects.filter(year=selected_year).values(
-                    'meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key'
-                ).distinct().order_by('meeting_key')
+                meetings_queryset = Meetings.objects.filter(year=selected_year).order_by('date_start').values(
+                    'meeting_key', 'year', 'country_name', 'meeting_name', 'circuit_short_name', 'circuit_key', 'date_start',
+                )
 
                 serializer = MeetingFilterSerializer(meetings_queryset, many=True)
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -70,20 +74,6 @@ class MeetingFilterAPIView(APIView):
         else:
             distinct_years = Meetings.objects.values_list('year', flat=True).distinct().order_by('year')
             return Response({'available_years': list(distinct_years)}, status=status.HTTP_200_OK)
-        
-# Endpoint para listar meetings filtrados por ano
-class MeetingListByYear(generics.ListAPIView):
-    serializer_class = MeetingSerializer
-
-    def get_queryset(self):
-        year = self.request.query_params.get('year', None)
-        if year is not None:
-            try:
-                year = int(year)
-                return Meetings.objects.filter(year=year).order_by('meeting_key')
-            except ValueError:
-                raise generics.ValidationError({"error": "O parâmetro 'year' deve ser um número inteiro."})
-        return Meetings.objects.none()
 
 # Endpoint para listar sessões filtradas por meeting_key
 class SessionListByMeeting(generics.ListAPIView):
@@ -94,7 +84,7 @@ class SessionListByMeeting(generics.ListAPIView):
         if meeting_key is not None:
             try:
                 meeting_key = int(meeting_key)
-                return Sessions.objects.filter(meeting_key=meeting_key).order_by('session_key')
+                return Sessions.objects.filter(meeting_key=meeting_key).order_by('date_start')
             except ValueError:
                 raise generics.ValidationError({"error": "O parâmetro 'meeting_key' deve ser um número inteiro."})
         return Sessions.objects.none()
@@ -460,41 +450,36 @@ class CarDataListBySessionAndDriver(generics.ListAPIView):
         
         return CarData.objects.filter( session_key=session_key, driver_number=driver_number ).order_by('date')
     
-class LocationListBySessionAndDriver(generics.ListAPIView):
-    serializer_class = LocationSerializer
+# Endpoint para listar localizações (Location) filtradas por session_key e driver_number    
+class LocationListBySessionAndDriver(View):
+    def get(self, request):
+        session_key = request.GET.get('session_key')
+        driver_number = request.GET.get('driver_number')
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
 
-    def get_queryset(self):
-        session_key = self.request.query_params.get('session_key')
-        driver_number = self.request.query_params.get('driver_number')
-        date_str = self.request.query_params.get('date')
+        if not session_key or not driver_number:
+            return JsonResponse({'error': 'session_key e driver_number são obrigatórios'}, status=400)
 
-        if not session_key or not driver_number or not date_str:
-            raise ValidationError({"error": "Os parâmetros 'session_key', 'driver_number' e 'date' são obrigatórios."})
+        # Converter datas para datetime naive (sem timezone)
+        start_date = parse_datetime(start_date_str) if start_date_str else None
+        end_date = parse_datetime(end_date_str) if end_date_str else None
 
-        try:
-            session_key = int(session_key)
-            driver_number = int(driver_number)
+        # Remover qualquer info de timezone, se por acaso vier
+        if start_date and start_date.tzinfo:
+            start_date = start_date.replace(tzinfo=None)
+        if end_date and end_date.tzinfo:
+            end_date = end_date.replace(tzinfo=None)
 
-            if date_str.endswith('Z'):
-                date_str = date_str[:-1]
-
-            date = datetime.fromisoformat(date_str)
-
-            if date.tzinfo is None:
-                date = django_timezone.make_aware(date, timezone.utc)
-
-        except ValueError:
-            raise ValidationError({"error": "Parâmetros inválidos. 'session_key' e 'driver_number' devem ser inteiros, e 'date' deve estar no formato ISO 8601."})
-
-        date_limit = date + timedelta(minutes=10)
-
-        return Location.objects.filter(
-            session_key=session_key,
-            driver_number=driver_number,
-            date__gte=date,
-            date__lt=date_limit
-        ).order_by('date')
-        
+        # Filtrar dados
+        queryset = Location.objects.filter(session_key=session_key, driver_number=driver_number)
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        data = list(queryset.order_by('date').values('date', 'x', 'y'))
+        return JsonResponse(data, safe=False)
+                                        
 #Endpoint para listar circuitos filtrados por circuit_key
 class CircuitDetailByCircuitID(generics.RetrieveAPIView):
     serializer_class = CircuitSerializer
@@ -512,3 +497,36 @@ class CircuitDetailByCircuitID(generics.RetrieveAPIView):
             return Circuit.objects.get(circuitid=circuit_key)
         except Circuit.DoesNotExist:
             raise ValidationError({"error": f"Circuito com circuitid={circuit_key} não encontrado."})
+
+# NOVO ENDPOINT: para obter as datas MIN e MAX de location
+class MinMaxLocationDate(APIView):
+    def get(self, request, *args, **kwargs):
+        session_key = request.query_params.get('session_key')
+        driver_number = request.query_params.get('driver_number')
+
+        if not session_key or not driver_number:
+            raise ValidationError({"error": "Os parâmetros 'session_key' e 'driver_number' são obrigatórios."})
+
+        try:
+            session_key = int(session_key)
+            driver_number = int(driver_number)
+        except ValueError:
+            raise ValidationError({"error": "Parâmetros inválidos. 'session_key' e 'driver_number' devem ser inteiros."})
+
+        try:
+            dates = Location.objects.filter(
+                session_key=session_key,
+                driver_number=driver_number
+            ).aggregate(min_date=Min('date'), max_date=Max('date'))
+        except OperationalError:
+            return Response({"error": "Erro no banco de dados ao buscar as datas Min/Max."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        min_date = dates.get('min_date')
+        max_date = dates.get('max_date')
+
+        if min_date is None or max_date is None:
+            return Response({'min_date': None, 'max_date': None}, status=status.HTTP_200_OK)
+
+        # Usar o novo serializer para formatar a resposta
+        serializer = MinMaxDateSerializer({'min_date': min_date, 'max_date': max_date})
+        return Response(serializer.data, status=status.HTTP_200_OK)

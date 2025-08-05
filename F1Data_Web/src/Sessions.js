@@ -25,7 +25,7 @@ function Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) {
         }
         const data = await response.json();
         setSessions(data);
-        console.log('DEBUG Sessions: Sessões carregadas para o meetingKey:', meetingKey, data);
+        // console.log('DEBUG Sessions: Sessões carregadas para o meetingKey:', meetingKey, data); // Pode manter ou remover, dependendo do seu conforto
       } catch (err) {
         console.error('Erro em Sessions:', err);
         setError(err.message || 'Erro ao carregar sessões.');
@@ -35,7 +35,7 @@ function Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) {
     };
 
     fetchSessions();
-  }, [meetingKey, API_BASE_URL]);
+  }, [meetingKey]);
 
   const formatSessionDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -47,8 +47,9 @@ function Sessions({ meetingKey, onSessionSelect, selectedSessionKey }) {
     return dateString.replace('Z', '').replace('T', ' ');
   };
 
-  // MODIFICADO AQUI: Agora passa session.date_end como quarto argumento
   const handleSessionClick = (session) => {
+      // ADICIONADO AQUI: Log para verificar o date_end antes de enviar
+      console.log('Sessions.js: Enviando date_start:', session.date_start, 'e date_end:', session.date_end, 'para App.js');
       onSessionSelect(session.session_key, session.session_name, session.date_start, session.date_end);
   };
 

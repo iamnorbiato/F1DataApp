@@ -31,7 +31,7 @@ def is_token_expired(expiration_timestamp_str):
 
         # Adiciona uma margem de segurança de 60 segundos (1 minuto)
         if current_timestamp >= expiration_timestamp - 60:
-            print(f"ALERTA: Token expirado ou próximo de expirar. Expira em: {datetime.fromtimestamp(expiration_timestamp, timezone.utc)} UTC. Agora: {datetime.fromtimestamp(current_timestamp, timezone.utc)} UTC.")
+#            print(f"ALERTA: Token expirado ou próximo de expirar. Expira em: {datetime.fromtimestamp(expiration_timestamp, timezone.utc)} UTC. Agora: {datetime.fromtimestamp(current_timestamp, timezone.utc)} UTC.")
             return True
         else:
 #            print(f"INFO: Token ainda válido. Expira em: {datetime.fromtimestamp(expiration_timestamp, timezone.utc)} UTC. Agora: {datetime.fromtimestamp(current_timestamp, timezone.utc)} UTC.")
@@ -115,8 +115,8 @@ def update_api_token_if_needed():
         new_token, new_expiration_timestamp = get_new_token(auth_url, username, password)
         update_env_file(new_token, new_expiration_timestamp)
         print("Processo de atualização de token concluído com sucesso!")
-    else:
-        print("INFO: Token da API OpenF1 verificado e válido. Nenhuma ação necessária.")
+#    else:
+#        print("INFO: Token da API OpenF1 verificado e válido. Nenhuma ação necessária.")
 
 if __name__ == "__main__":
     # Este bloco só é executado se você rodar 'python update_token.py' diretamente

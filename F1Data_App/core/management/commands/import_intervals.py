@@ -1,102 +1,88 @@
 # G:\Learning\F1Data\F1Data_App\core\management\commands\import_intervals.py
 import requests
 import json
-from datetime import datetime, timezone, timedelta
 import os
 import time
+from datetime import datetime, timedelta, timezone
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection, OperationalError, IntegrityError, transaction
-from django.conf import settings # Importado para settings.BASE_DIR ou settings.TIME_ZONE
+from django.db import transaction, IntegrityError, OperationalError
+from django.conf import settings
 
-# Importa os modelos necessários
-from core.models import Drivers, Sessions, Intervals 
+from core.models import Drivers, Intervals, Sessions 
 from dotenv import load_dotenv
-from update_token import update_api_token_if_needed
-import pytz # Para manipulação de fusos horários
 
-ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg') 
+from .token_manager import get_api_token
+
+ENV_FILE_PATH = os.path.join(settings.BASE_DIR, 'env.cfg')
+
 
 class Command(BaseCommand):
-    help = 'Importa dados de intervalos (intervals) da API OpenF1 e os insere na tabela intervals do PostgreSQL usando ORM.'
+    help = 'Importa dados de intervalos da API OpenF1 filtrando por meeting_key e modo de operação (insert-only ou insert+update).'
 
-    API_URL = "https://api.openf1.org/v1/intervals" 
-    CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'import_config.json')
-
+    API_URL = "https://api.openf1.org/v1/intervals"
     API_DELAY_SECONDS = 0.2
-    API_MAX_RETRIES = 3 
-    API_RETRY_DELAY_SECONDS = 5 
-    BULK_SIZE = 5000 # <--- ADICIONADO: Tamanho do lote para bulk_create
-
+    API_MAX_RETRIES = 3
+    API_RETRY_DELAY_SECONDS = 5
+    BULK_SIZE = 5000
     warnings_count = 0
 
-    def get_config_value(self, key=None, default=None, section=None):
-        config = {}
-        if not os.path.exists(self.CONFIG_FILE):
-            self.stdout.write(self.style.WARNING(f"Aviso: Arquivo de configuração '{self.CONFIG_FILE}' não encontrado. Usando valor padrão para '{key}'."))
-            self.warnings_count += 1
-            return default
-        try:
-            with open(self.CONFIG_FILE, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+    def add_arguments(self, parser):
+        parser.add_argument('--meeting_key', type=int, help='Meeting key para buscar dados de intervalos. (Opcional, se omitido, processa todos os meetings)')
+        parser.add_argument('--mode', type=str, choices=['I', 'U'], default='I', help='Modo de operação: I=insert only, U=insert+update.')
 
-            if section:
-                section_data = config.get(section, default if key is None else {})
-                if key is None:
-                    return section_data
-                else:
-                    return section_data.get(key, default)
-            else:
-                if key is None:
-                    return config
-                else:
-                    return config.get(key, default)
+    def add_warning(self, message):
+        if not hasattr(self, 'warnings_count'):
+            self.warnings_count = 0
+            self.all_warnings_details = []
+        self.warnings_count += 1
+        self.all_warnings_details.append(message)
+        self.stdout.write(self.style.WARNING(message))
 
-        except json.JSONDecodeError as e:
-            raise CommandError(f"Erro ao ler/parsear o arquivo de configuração JSON '{self.CONFIG_FILE}': {e}")
-        except Exception as e:
-            raise CommandError(f"Erro inesperado ao acessar o arquivo de configuração: {e}")
+    def get_meeting_session_driver_triplets_to_fetch(self, meeting_key_filter=None, mode='I'):
+        self.stdout.write(self.style.MIGRATE_HEADING("Obtendo triplas (meeting_key, session_key, driver_number) para buscar intervalos..."))
+        
+        sessions_query = Sessions.objects.all()
+        if meeting_key_filter:
+            sessions_query = sessions_query.filter(meeting_key=meeting_key_filter)
+        
+        all_sessions_pairs = set(sessions_query.values_list('meeting_key', 'session_key'))
+        self.stdout.write(f"Encontrados {len(all_sessions_pairs)} pares (meeting_key, session_key) para todas as sessões{' para o meeting_key especificado' if meeting_key_filter else ''}.")
 
-    def get_race_session_driver_triplets_to_process(self): 
-        self.stdout.write(self.style.MIGRATE_HEADING("Identificando triplas (meeting_key, session_key, driver_number) para sessões 'Race' de drivers..."))
-        self.stdout.write(f"Buscando pares (meeting_key, session_key) de sessões 'Race'...")
-        race_sessions_pairs = set(
-            Sessions.objects.filter(session_type='Race').values_list('meeting_key', 'session_key')
-        )
-        self.stdout.write(f"Encontrados {len(race_sessions_pairs)} pares (meeting_key, session_key) para sessões 'Race'.")
-        self.stdout.write(f"Buscando todas as triplas de drivers (meeting_key, session_key, driver_number) da tabela 'drivers'...")
         all_driver_triplets = set(
-            Drivers.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
+            Drivers.objects.filter(
+                meeting_key__in=[pair[0] for pair in all_sessions_pairs],
+                session_key__in=[pair[1] for pair in all_sessions_pairs]
+            ).values_list('meeting_key', 'session_key', 'driver_number')
         )
-        self.stdout.write(f"Encontradas {len(all_driver_triplets)} triplas de drivers.")
-        relevant_driver_triplets = set(
-            (m, s, d) for m, s, d in all_driver_triplets if (m, s) in race_sessions_pairs
-        )
-        self.stdout.write(f"Filtradas {len(relevant_driver_triplets)} triplas de drivers para sessões 'Race'.")
-        existing_interval_triplets = set(
-            Intervals.objects.all().values_list('meeting_key', 'session_key', 'driver_number')
-        )
-        self.stdout.write(f"Buscando triplas já presentes na tabela 'intervals'...")
-        self.stdout.write(f"Encontradas {len(existing_interval_triplets)} triplas já presentes na tabela 'intervals'.")
-        triplets_to_process = sorted(list(relevant_driver_triplets - existing_interval_triplets))
-        self.stdout.write(self.style.SUCCESS(f"Identificadas {len(triplets_to_process)} triplas (M,S,D) de drivers de sessões 'Race' que precisam de dados de intervals."))
-        return triplets_to_process
+        self.stdout.write(f"Encontradas {len(all_driver_triplets)} triplas de drivers relevantes para todas as sessões.")
 
-    def fetch_intervals_data(self, session_key, use_token=True):
-        if not session_key:
-            raise CommandError("session_key deve ser fornecido para buscar dados de intervals da API.")
-        url = f"{self.API_URL}?session_key={session_key}"
-        headers = {"Accept": "application/json"}
-        if use_token:
-            api_token = os.getenv('OPENF1_API_TOKEN')
-            if not api_token:
-                self.warnings_count += 1
-                raise CommandError("Token da API (OPENF1_API_TOKEN) não encontrado. Requisição será feita sem Authorization.")
-            else:
-                headers["Authorization"] = f"Bearer {api_token}"
+        triplets_to_process = set()
+        if mode == 'I':
+            existing_intervals_pk_triplets = set(
+                Intervals.objects.filter(
+                    meeting_key__in=[m for m,s,d in all_driver_triplets],
+                    session_key__in=[s for m,s,d in all_driver_triplets],
+                    driver_number__in=[d for m,s,d in all_driver_triplets]
+                ).values_list('meeting_key', 'session_key', 'driver_number', 'date').distinct()
+            )
+            triplets_to_process = all_driver_triplets
+            self.stdout.write(f"Modo 'I': {len(triplets_to_process)} triplas (M,S,D) serão consideradas para busca, duplicatas serão puladas na inserção.")
         else:
-            self.warnings_count += 1
-            pass
+            triplets_to_process = all_driver_triplets
+            self.stdout.write(f"Modo 'U': Todas as {len(triplets_to_process)} triplas (M,S,D) relevantes serão consideradas para atualização/inserção.")
+
+        return sorted(list(triplets_to_process))
+
+    def fetch_intervals_data(self, session_key, driver_number, api_token=None):
+        url = f"{self.API_URL}?session_key={session_key}&driver_number={driver_number}"
+        headers = {"Accept": "application/json"}
+
+        if api_token:
+            headers["Authorization"] = f"Bearer {api_token}"
+        else:
+            self.add_warning(f"Uso do token desativado ou token não disponível. Requisição para Sess {session_key}, Driver {driver_number} será feita sem Authorization.")
+
         for attempt in range(self.API_MAX_RETRIES):
             try:
                 response = requests.get(url, headers=headers)
@@ -104,119 +90,211 @@ class Command(BaseCommand):
                 return response.json()
             except requests.exceptions.RequestException as e:
                 status_code = getattr(response, 'status_code', 'Unknown')
-                if status_code in [500, 502, 503, 504] and attempt < self.API_MAX_RETRIES - 1:
+                error_url_attempted = response.url if hasattr(response, 'url') else url
+                error_msg = f"Erro {status_code} da API para URL: {error_url_attempted} - {e}"
+                if status_code in [500, 502, 503, 504, 401, 403, 422] and attempt < self.API_MAX_RETRIES - 1:
                     delay = self.API_RETRY_DELAY_SECONDS * (2 ** attempt)
-                    self.stdout.write(self.style.WARNING(f"  Aviso: Erro {status_code} da API para URL: {url}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos..."))
-                    self.warnings_count += 1
+                    self.add_warning(f"{error_msg}. Tentativa {attempt + 1}/{self.API_MAX_RETRIES}. Retentando em {delay} segundos...")
+                    if hasattr(response, 'text'):
+                        self.add_warning(f"Corpo da Resposta do Erro: {response.text}")
                     time.sleep(delay)
                 else:
+                    self.add_warning(f"Falha na busca da API após retries para {error_url_attempted}: {error_msg}")
+                    if hasattr(response, 'text'):
+                        self.add_warning(f"Corpo da Resposta do Erro: {response.text}")
                     return {"error_status": status_code,
-                            "error_url": url,
+                            "error_url": error_url_attempted,
                             "error_message": str(e)}
+        self.add_warning(f"Falha na busca da API para {url}: Máximo de retries excedido.")
         return {"error_status": "Failed after retries", "error_url": url, "error_message": "Max retries exceeded."}
 
-    def build_interval_instance(self, interval_data_dict):
-        session_key = interval_data_dict.get('session_key')
-        meeting_key = interval_data_dict.get('meeting_key')
-        driver_number = interval_data_dict.get('driver_number')
-        date_str = interval_data_dict.get('date')
-        gap_to_leader = interval_data_dict.get('gap_to_leader')
-        interval_value = interval_data_dict.get('interval')
-        if any(val is None for val in [session_key, meeting_key, driver_number, date_str]):
-            missing_fields = [k for k,v in {'session_key': session_key, 'meeting_key': meeting_key, 'driver_number': driver_number, 'date': date_str}.items() if v is None]
-            raise ValueError(f"Dados incompletos para Intervals: faltam {missing_fields}. Dados: {interval_data_dict}")
-        date_obj = None
-        if date_str:
+    def process_interval_entry(self, interval_data_dict, mode):
+        def to_datetime_aware(val):
+            if not val:
+                return None
             try:
-                date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                return datetime.fromisoformat(val).astimezone(timezone.utc)
             except ValueError:
-                raise ValueError(f"Formato de data inválido: {date_str}")
-        return Intervals(
-            session_key=session_key,
-            meeting_key=meeting_key,
-            driver_number=driver_number,
-            date=date_obj,
-            gap_to_leader=gap_to_leader,
-            interval_value=interval_value
-        )
+                return None
+
+        meeting_key = interval_data_dict.get("meeting_key")
+        session_key = interval_data_dict.get("session_key")
+        driver_number = interval_data_dict.get("driver_number")
+        
+        interval_api_value = interval_data_dict.get("interval") 
+        
+        date_str = interval_data_dict.get("date")
+
+        if any(val is None for val in [meeting_key, session_key, driver_number, date_str]):
+            missing_fields = [k for k,v in {
+                'meeting_key': meeting_key, 'session_key': session_key,
+                'driver_number': driver_number,
+                'date': date_str
+            }.items() if v is None]
+            self.add_warning(f"Intervalo ignorado: dados obrigatórios da PK ou data ausentes para Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}. Faltando: {missing_fields}")
+            return 'skipped_missing_data'
+
+        date_obj = to_datetime_aware(date_str)
+        if date_obj is None:
+            self.add_warning(f"Formato de data inválido para intervalo (Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}): '{date_str}'.")
+            return 'skipped_invalid_date'
+
+        defaults = {
+            "gap_to_leader": interval_data_dict.get("gap_to_leader"),
+            "interval_value": interval_api_value,
+        }
+
+        try:
+            if mode == 'U':
+                obj, created = Intervals.objects.update_or_create(
+                    meeting_key=meeting_key,
+                    session_key=session_key,
+                    driver_number=driver_number,
+                    date=date_obj,
+                    defaults=defaults
+                )
+                return 'inserted' if created else 'updated'
+            else:
+                if Intervals.objects.filter(
+                    meeting_key=meeting_key,
+                    session_key=session_key,
+                    driver_number=driver_number,
+                    date=date_obj
+                ).exists():
+                    return 'skipped'
+                
+                Intervals.objects.create(
+                    meeting_key=meeting_key,
+                    session_key=session_key,
+                    driver_number=driver_number,
+                    date=date_obj,
+                    **defaults
+                )
+                return 'inserted'
+        except IntegrityError as ie:
+            self.add_warning(f"IntegrityError ao processar intervalo (Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}, Date {date_obj}). Erro: {ie}. Provavelmente duplicata não pega antes. Ignorando.")
+            return 'skipped'
+        except Exception as e:
+            self.add_warning(f"Erro FATAL ao processar intervalo (Mtg {meeting_key}, Sess {session_key}, Driver {driver_number}, Date {date_obj}): {e}. Dados API: {interval_data_dict}")
+            raise
+
 
     def handle(self, *args, **options):
         load_dotenv(dotenv_path=ENV_FILE_PATH)
+
         self.warnings_count = 0
+        self.all_warnings_details = []
+
+        meeting_key_param = options.get('meeting_key')
+        mode_param = options.get('mode', 'I')
+
         use_api_token_flag = os.getenv('USE_API_TOKEN', 'True').lower() == 'true'
-        if use_api_token_flag:
-            try:
-                update_api_token_if_needed()
-            except Exception as e:
-                raise CommandError(f"Falha ao verificar/atualizar o token da API: {e}. Não é possível prosseguir com a importação.")
-        else:
-            self.stdout.write(self.style.NOTICE("Uso do token desativado (USE_API_TOKEN=False no env.cfg). Buscando dados históricos."))
-        self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação de Intervals (ORM)..."))
+
+        self.stdout.write(self.style.MIGRATE_HEADING("Iniciando a importação/atualização de Intervals (ORM)..."))
+        self.stdout.write(f"Parâmetros recebidos: meeting_key={meeting_key_param if meeting_key_param else 'Nenhum'}, mode={mode_param}")
+
+        intervals_found_api_total = 0
         intervals_inserted_db = 0
+        intervals_updated_db = 0
         intervals_skipped_db = 0
-        total_race_session_driver_triplets_eligible = 0
-        sessions_api_calls_processed_count = 0
+        intervals_skipped_missing_data = 0
+        intervals_skipped_invalid_date = 0
+        api_call_errors = 0
+
         try:
-            all_race_session_driver_triplets = self.get_race_session_driver_triplets_to_process()
-            total_race_session_driver_triplets_eligible = len(all_race_session_driver_triplets)
-            if not all_race_session_driver_triplets:
-                self.stdout.write(self.style.NOTICE("Nenhuma tripla (M,S,D) de sessões 'Race' encontrada para importar intervals. Encerrando."))
+            api_token = None
+            if use_api_token_flag:
+                api_token = get_api_token(self)
+            
+            if not api_token and use_api_token_flag:
+                self.stdout.write(self.style.WARNING("Falha ao obter token da API. Prosseguindo sem autenticação."))
+                self.warnings_count += 1
+                use_api_token_flag = False
+
+            triplets_to_fetch = self.get_meeting_session_driver_triplets_to_fetch(
+                meeting_key_filter=meeting_key_param,
+                mode=mode_param
+            )
+
+            if not triplets_to_fetch:
+                self.stdout.write(self.style.NOTICE("Nenhuma tripla (M,S,D) encontrada para buscar dados de intervalos. Encerrando."))
                 return
-            self.stdout.write(self.style.SUCCESS(f"Total de {total_race_session_driver_triplets_eligible} triplas (M,S,D) de drivers de sessões 'Race' para processamento."))
-            api_delay = self.API_DELAY_SECONDS
-            session_pairs_to_fetch_api = {}
-            for m_key, s_key, d_num in all_race_session_driver_triplets:
-                session_pairs_to_fetch_api.setdefault((m_key, s_key), set()).add(d_num)
-            unique_session_pairs_to_fetch = sorted(list(session_pairs_to_fetch_api.keys()))
-            for i, (meeting_key, session_key) in enumerate(unique_session_pairs_to_fetch):
-                sessions_api_calls_processed_count += 1
-                current_session_intervals_objects = []
-                try:
-                    intervals_data_from_api = self.fetch_intervals_data(session_key=session_key, use_token=use_api_token_flag)
-                    if isinstance(intervals_data_from_api, dict) and "error_status" in intervals_data_from_api:
-                        self.stdout.write(self.style.ERROR(f"  Erro na API para Sess {session_key}, Mtg {meeting_key}: {intervals_data_from_api['error_message']}. Pulando esta sessão."))
-                        self.warnings_count += 1
-                        continue
-                    if not intervals_data_from_api:
-                        self.stdout.write(self.style.WARNING(f"  Aviso: Nenhuma entrada de intervals encontrada na API para Sess {session_key}, Mtg {meeting_key}."))
-                        self.warnings_count += 1
-                        continue
-                    relevant_drivers_for_current_session_set = session_pairs_to_fetch_api.get((meeting_key, session_key), set())
-                    for interval_entry_dict in intervals_data_from_api:
-                        driver_num_from_api = interval_entry_dict.get('driver_number')
-                        if driver_num_from_api in relevant_drivers_for_current_session_set:
-                            try:
-                                interval_instance = self.build_interval_instance(interval_entry_dict)
-                                if interval_instance is not None:
-                                    current_session_intervals_objects.append(interval_instance)
-                            except Exception as build_e:
-                                self.stdout.write(self.style.ERROR(f"Erro ao construir instância de intervals (Sess {session_key}, Driver {driver_num_from_api}): {build_e}. Pulando este registro."))
-                                self.warnings_count += 1
-                    if current_session_intervals_objects:
-                        with transaction.atomic():
-                            created_instances = Intervals.objects.bulk_create(current_session_intervals_objects, batch_size=self.BULK_SIZE, ignore_conflicts=True)
-                            intervals_inserted_db += len(created_instances)
-                            intervals_skipped_db += (len(current_session_intervals_objects) - len(created_instances))
-                            self.stdout.write(self.style.SUCCESS(f"  {len(created_instances)} registros inseridos (total para esta sessão)."))
-                    else:
-                        self.stdout.write(self.style.WARNING(f"  Aviso: Nenhuma entrada de intervals válida encontrada para inserção para Sess {session_key}, Mtg {meeting_key} (após filtragem de driver)."))
-                        self.warnings_count += 1
-                    if api_delay > 0:
-                        time.sleep(api_delay)
-                except Exception as session_overall_e:
-                    self.stdout.write(self.style.ERROR(f"Erro ao processar Sessão (Mtg {meeting_key}, Sess {session_key}): {session_overall_e}. Esta sessão não foi processada por completo. Pulando para a próxima sessão."))
-                    self.warnings_count += 1
-            self.stdout.write(self.style.SUCCESS("Importação de Intervals concluída com sucesso para todas as sessões e drivers elegíveis!"))
+
+            self.stdout.write(self.style.SUCCESS(f"Total de {len(triplets_to_fetch)} triplas (M,S,D) elegíveis para busca na API."))
+
+            for i, (m_key, s_key, d_num) in enumerate(triplets_to_fetch):
+                self.stdout.write(f"Buscando e processando intervalos para tripla {i+1}/{len(triplets_to_fetch)}: Mtg {m_key}, Sess {s_key}, Driver {d_num}...")
+
+                intervals_data_from_api = self.fetch_intervals_data(
+                    session_key=s_key,
+                    driver_number=d_num,
+                    api_token=api_token
+                )
+
+                if isinstance(intervals_data_from_api, dict) and "error_status" in intervals_data_from_api:
+                    api_call_errors += 1
+                    self.add_warning(f"Erro na API para Mtg {m_key}, Sess {s_key}, Driver {d_num}: {intervals_data_from_api['error_message']}")
+                    continue
+
+                if not intervals_data_from_api:
+                    self.stdout.write(self.style.WARNING(f"Nenhum registro de intervalos encontrado na API para Mtg {m_key}, Sess {s_key}, Driver {d_num}."))
+                    continue
+
+                intervals_found_api_total += len(intervals_data_from_api)
+                self.stdout.write(f"Encontrados {len(intervals_data_from_api)} registros de intervalos para Mtg {m_key}, Sess {s_key}, Driver {d_num}. Processando...")
+
+                if mode_param == 'U':
+                    with transaction.atomic():
+                        Intervals.objects.filter(
+                            meeting_key=m_key,
+                            session_key=s_key,
+                            driver_number=d_num
+                        ).delete()
+                        self.stdout.write(f"Registros de intervalos existentes deletados para Mtg {m_key}, Sess {s_key}, Driver {d_num}.")
+                
+                for interval_entry_dict in intervals_data_from_api:
+                    try:
+                        result = self.process_interval_entry(interval_entry_dict, mode=mode_param)
+                        if result == 'inserted':
+                            intervals_inserted_db += 1
+                        elif result == 'updated':
+                            intervals_updated_db += 1
+                        elif result == 'skipped':
+                            intervals_skipped_db += 1
+                        elif result == 'skipped_missing_data':
+                            intervals_skipped_missing_data += 1
+                        elif result == 'skipped_invalid_date':
+                            intervals_skipped_invalid_date += 1
+                    except Exception as interval_process_e:
+                        self.add_warning(f"Erro ao processar UM REGISTRO de intervalo (Mtg {m_key}, Sess {s_key}, Driver {d_num}): {interval_process_e}. Dados API: {interval_entry_dict}. Pulando para o próximo.")
+
+
+                if self.API_DELAY_SECONDS > 0:
+                    time.sleep(self.API_DELAY_SECONDS)
+
+            self.stdout.write(self.style.SUCCESS("Processamento de Intervals concluído!"))
+
         except OperationalError as e:
-            raise CommandError(f"Erro operacional de banco de dados durante a importação (ORM): {e}")
+            raise CommandError(f"Erro operacional de banco de dados durante a importação/atualização (ORM): {e}")
         except Exception as e:
-            raise CommandError(f"Erro inesperado durante a importação de Intervals (ORM): {e}")
+            raise CommandError(f"Erro inesperado durante a importação/atualização de Intervals (ORM): {e}")
         finally:
-            self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo da Importação de Intervals (ORM) ---"))
-            self.stdout.write(self.style.SUCCESS(f"Triplas (meeting_key, session_key, driver_number) de drivers de Race elegíveis: {total_race_session_driver_triplets_eligible}"))
-            self.stdout.write(self.style.SUCCESS(f"Sessões (meeting_key, session_key) com API processada: {sessions_api_calls_processed_count}"))
-            self.stdout.write(self.style.SUCCESS(f"Registros inseridos no DB: {intervals_inserted_db}"))
-            self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB): {intervals_skipped_db}"))
+            self.stdout.write(self.style.MIGRATE_HEADING("\n--- Resumo do Processamento de Intervals (ORM) ---"))
+            self.stdout.write(self.style.SUCCESS(f"Triplas (M,S,D) processadas: {len(triplets_to_fetch) if 'triplets_to_fetch' in locals() else 0}"))
+            self.stdout.write(self.style.SUCCESS(f"Registros de Intervals encontrados na API (total): {intervals_found_api_total}"))
+            self.stdout.write(self.style.SUCCESS(f"Registros novos inseridos no DB: {intervals_inserted_db}"))
+            self.stdout.write(self.style.SUCCESS(f"Registros existentes atualizados no DB: {intervals_updated_db}"))
+            self.stdout.write(self.style.NOTICE(f"Registros ignorados (já existiam no DB em modo 'I'): {intervals_skipped_db}"))
+            if intervals_skipped_missing_data > 0:
+                self.stdout.write(self.style.WARNING(f"Registros ignorados (dados obrigatórios da PK/data ausentes): {intervals_skipped_missing_data}"))
+            if intervals_skipped_invalid_date > 0:
+                self.stdout.write(self.style.WARNING(f"Registros ignorados (formato de data inválido): {intervals_skipped_invalid_date}"))
+            if api_call_errors > 0:
+                self.stdout.write(self.style.ERROR(f"Erros em chamadas à API: {api_call_errors}"))
             self.stdout.write(self.style.WARNING(f"Total de Avisos/Alertas durante a execução: {self.warnings_count}"))
+            if hasattr(self, 'all_warnings_details') and self.all_warnings_details:
+                self.stdout.write(self.style.WARNING("\nDetalhes dos Avisos/Alertas:"))
+                for warn_msg in self.all_warnings_details:
+                    self.stdout.write(self.style.WARNING(f" - {warn_msg}"))
             self.stdout.write(self.style.MIGRATE_HEADING("---------------------------------------------"))
-            self.stdout.write(self.style.SUCCESS("Importação de intervals finalizada!"))
+            self.stdout.write(self.style.SUCCESS("Processamento de intervals finalizado!"))

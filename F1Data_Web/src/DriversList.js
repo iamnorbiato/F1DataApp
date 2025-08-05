@@ -1,10 +1,11 @@
 // G:\Learning\F1Data\F1Data_Web\src\DriversList.js
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from './api'; // ajuste o caminho se necessário
+import { API_BASE_URL } from './api';
 console.log('API_BASE_URL:', API_BASE_URL);
 
 // MODIFICADO: Agora recebe a prop onDriverSelect (callback do pai)
-function DriversList({ sessionKey, onDriverSelect }) {
+// Também recebe selectedDriverNumber para aplicar a classe 'active'
+function DriversList({ sessionKey, onDriverSelect, selectedDriverNumber }) {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,48 +35,65 @@ function DriversList({ sessionKey, onDriverSelect }) {
       }
     };
     fetchDrivers();
-  }, [sessionKey, API_BASE_URL]);
+  }, [sessionKey]);
 
-  // Handler para o clique em um item de driver
+  // INÍCIO DA CORREÇÃO: Passa o OBJETO COMPLETO do driver
   const handleDriverClick = (driver) => {
-    // Chama a função de callback passada via prop, enviando o driver completo
     if (onDriverSelect) {
-      onDriverSelect(driver); 
+      onDriverSelect(driver); // Passa o OBJETO 'driver' completo para o pai
     }
   };
+  // FIM DA CORREÇÃO
 
   if (loading) {
-    return <p>Carregando drivers...</p>;
+    return (
+      <div className="drivers-list-panel">
+        <h2>Pilotos da Sessão</h2>
+        <p>Carregando drivers...</p>
+      </div>
+    );
   }
 
   if (error) {
-    return <p style={{ color: 'red' }}>Erro: {error}</p>;
+    return (
+      <div className="drivers-list-panel">
+        <h2>Pilotos da Sessão</h2>
+        <p style={{ color: 'red' }}>Erro: {error}</p>
+      </div>
+    );
   }
 
   if (drivers.length === 0) {
-    return <p>Nenhum driver encontrado para esta sessão.</p>;
+    return (
+      <div className="drivers-list-panel">
+        <h2>Pilotos da Sessão</h2>
+        <p>Nenhum driver encontrado para esta sessão.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="drivers-list-container">
+    <div className="drivers-list-panel">
+      <h2>Pilotos da Sessão</h2>
       <div className="drivers-table-header">
-        <span>Número</span>
-        <span>Driver</span>
-        <span>Equipe</span>
+        <span className="header-driver-num">Num</span>
+        <span className="header-driver-pilot">Piloto</span>
+        <span className="header-driver-team">Equipe</span>
       </div>
-      <div className="drivers-list-scrollable">
-        {drivers.map(driver => (
-          <div
-            key={driver.driver_number}
-            className="driver-list-item"
-            onClick={() => handleDriverClick(driver)} // NOVO: Torna o item clicável
-            style={{ cursor: 'pointer' }} // Adiciona um cursor de ponteiro para indicar clicabilidade
-          >
-            <span>{driver.driver_number}</span>
-            <span>{driver.full_name} ({driver.country_code})</span>
-            <span style={{ color: `#${driver.team_colour}` }}>{driver.team_name}</span>
-          </div>
-        ))}
+      <div className="drivers-list-content">
+        <ul className="drivers-list-items">
+          {drivers.map(driver => (
+            <li
+              key={driver.driver_number}
+              className={`driver-list-item ${selectedDriverNumber === driver.driver_number ? 'active' : ''}`}
+              onClick={() => handleDriverClick(driver)}
+            >
+              <span className="driver-num">{driver.driver_number}</span>
+              <span className="driver-pilot">{driver.name_acronym} - {driver.full_name}</span>
+              <span className="driver-team" style={{ color: `#${driver.team_colour}` }}>{driver.team_name}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
