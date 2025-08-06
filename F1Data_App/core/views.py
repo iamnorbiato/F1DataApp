@@ -434,21 +434,38 @@ class TeamRadioListBySessionAndDriver(generics.ListAPIView):
         return TeamRadio.objects.filter( session_key=session_key, driver_number=driver_number ).order_by('date')
 
 # Endpoint para listar dados do carro (CarData) filtrados por session_key e driver_number
-class CarDataListBySessionAndDriver(generics.ListAPIView):
-    serializer_class = CarDataSerializer
+class CarDataListBySessionAndDriver(View):
+    def get(self, request):
+        session_key = request.GET.get('session_key')
+        driver_number = request.GET.get('driver_number')
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
 
-    def get_queryset(self):
-        session_key = self.request.query_params.get('session_key')
-        driver_number = self.request.query_params.get('driver_number')
         if not session_key or not driver_number:
-            raise generics.ValidationError({"error": "Os parâmetros 'session_key' e 'driver_number' são obrigatórios."})
-        try:
-            session_key = int(session_key)
-            driver_number = int(driver_number)
-        except ValueError:
-            raise generics.ValidationError({"error": "Os parâmetros 'session_key' e 'driver_number' devem ser números inteiros."})
-        
-        return CarData.objects.filter( session_key=session_key, driver_number=driver_number ).order_by('date')
+            return JsonResponse({'error': 'session_key e driver_number são obrigatórios'}, status=400)
+
+        # Converter datas para datetime naive (sem timezone)
+        start_date = parse_datetime(start_date_str) if start_date_str else None
+        end_date = parse_datetime(end_date_str) if end_date_str else None
+
+        # Remover timezone se presente
+        if start_date and start_date.tzinfo:
+            start_date = start_date.replace(tzinfo=None)
+        if end_date and end_date.tzinfo:
+            end_date = end_date.replace(tzinfo=None)
+
+        # Filtrar dados
+        queryset = CarData.objects.filter(session_key=session_key, driver_number=driver_number)
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+
+        # Selecionar os campos relevantes e ordenar por data
+        data = list(queryset.order_by('date').values(
+            'date', 'speed', 'n_gear', 'drs', 'throttle', 'brake', 'rpm'
+        ))
+        return JsonResponse(data, safe=False)
     
 # Endpoint para listar localizações (Location) filtradas por session_key e driver_number    
 class LocationListBySessionAndDriver(View):

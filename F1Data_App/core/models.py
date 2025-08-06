@@ -262,22 +262,20 @@ class Stint(models.Model):
         return f"Stint: Mtg {self.meeting_key}, Sess {self.session_key}, Stint {self.stint_number}, Driver {self.driver_number}"
     
 class Position(models.Model):
-    date = models.DateTimeField() # NOT NULL na PK composta
-    driver_number = models.IntegerField() # NOT NULL na PK composta
-    meeting_key = models.IntegerField() # NOT NULL na PK composta
-    session_key = models.IntegerField() # NOT NULL na PK composta
+    date = models.DateTimeField(primary_key=True)  # Parte da PK composta
+    driver_number = models.IntegerField()
+    meeting_key = models.IntegerField()
+    session_key = models.IntegerField()
 
-    position = models.IntegerField(null=True, blank=True) # Pode ser null se a API retornar null
+    position = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        managed = False  # Django NÃO vai gerenciar a criação/alteração desta tabela
-        db_table = 'positions'  # Nome exato da tabela no banco de dados (usei 'positions' para evitar conflito com palavra reservada)
-        # Define a chave primária composta real para o banco de dados
-        unique_together = (('meeting_key', 'session_key', 'driver_number', 'date'),) # Ordem da PK no DDL
+        managed = False
+        db_table = 'positions'
+        unique_together = (('meeting_key', 'session_key', 'driver_number', 'date'),)
         verbose_name_plural = 'Positions'
 
     def __str__(self):
-        # Retorna uma representação legível
         return f"Position: Mtg {self.meeting_key}, Sess {self.session_key}, Driver {self.driver_number}, Pos {self.position} ({self.date.strftime('%Y-%m-%d %H:%M:%S.%f')})"
 
 class SessionResult(models.Model):
