@@ -1,8 +1,10 @@
 // G:\Learning\F1Data\F1Data_Web\src\SessionResultsPanel.js
 
+import { API_BASE_URL } from './api';
+import { useDriverHoverCard } from './utils/Functions'; // Importa o Hook
 import React, { useState, useEffect } from 'react';
 
-// --- FUNÇÕES DE FORMATAÇÃO E AJUSTE ---
+// --- FUNÇÕES DE FORMATAÇÃO E AJUSTE (MANTIDAS) ---
 
 // Função para formatar segundos em MM:SS.ms (para Practice e Q1/Q2/Q3)
 const formatSecondsToMinutesSeconds = (totalSeconds) => {
@@ -70,9 +72,9 @@ const formatGapToLeaderValue = (gapArray, sessionType) => {
 // NOVA FUNÇÃO: Formatar tempo para Qualificação (Q1, Q2, Q3)
 const formatQualifyingTime = (timeInSeconds) => {
   if (timeInSeconds === null || isNaN(timeInSeconds)) {
-    return 'DNQ'; // Se não tiver tempo, é "Did Not Qualify"
+    return 'DNQ';
   }
-  return formatSecondsToMinutesSeconds(timeInSeconds); // Reutiliza a formatação M:SS.ms
+  return formatSecondsToMinutesSeconds(timeInSeconds);
 };
 
 // Consolida DNF/DNS/DSQ em um único status
@@ -90,11 +92,10 @@ function SessionResultsPanel({ sessionKey }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [hoveredHeadshotUrl, setHoveredHeadshotUrl] = useState(null);
-  const [mouseX, setMouseX] = useState(0);
-  const [mouseY, setMouseY] = useState(0);
-
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://home:30008'; 
+  
+  // INÍCIO DA CORREÇÃO: Usa o Hook customizado
+  const { hoveredHeadshotUrl, mouseX, mouseY, handleMouseEnter, handleMouseLeave, handleMouseMove } = useDriverHoverCard();
+  // FIM DA CORREÇÃO
 
   useEffect(() => {
     const fetchSessionResults = async () => {
@@ -113,7 +114,6 @@ function SessionResultsPanel({ sessionKey }) {
         }
         const data = await response.json();
 
-        // --- LÓGICA DE ORDENAÇÃO DOS RESULTADOS (INALETARADA) ---
         const sortedData = [...data].sort((a, b) => {
           const statusA = getCombinedStatusFlag(a);
           const statusB = getCombinedStatusFlag(b);
@@ -122,7 +122,7 @@ function SessionResultsPanel({ sessionKey }) {
             if (status === 'DNS') return 3; 
             if (status === 'DNF') return 2; 
             if (status === 'DSQ') return 4; 
-            return 1; // Posição normal
+            return 1;
           };
 
           const weightA = getStatusWeight(statusA);
@@ -146,7 +146,6 @@ function SessionResultsPanel({ sessionKey }) {
           }
           return 0; 
         });
-        // --- FIM DA LÓGICA DE ORDENAÇÃO ---
 
         setResults(sortedData || []); 
 
@@ -160,19 +159,6 @@ function SessionResultsPanel({ sessionKey }) {
 
     fetchSessionResults();
   }, [sessionKey, API_BASE_URL]);
-
-  const handleMouseEnter = (url) => {
-    setHoveredHeadshotUrl(url);
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredHeadshotUrl(null);
-  };
-
-  const handleMouseMove = (event) => {
-    setMouseX(event.clientX);
-    setMouseY(event.clientY);
-  };
 
   if (loading) {
     return (
@@ -209,13 +195,11 @@ function SessionResultsPanel({ sessionKey }) {
   return (
     <div className="session-results-panel">
       <h2>Resultado da Sessão</h2>
-        {/* CABEÇALHO DA TABELA - FIXO E CONDICIONAL */}
         {currentSessionType && ( 
           <div className={`session-results-table-header ${isQualifying ? 'qualifying-header-layout' : 'practice-race-header-layout'}`}> 
               <span className="header-pos">Pos</span>
               <span className="header-pilot">Driver & Team</span>
               
-              {/* CABEÇALHO CONDICIONAL PARA LAPS / Q1 / Q2 / Q3 */}
               {(isPractice || isRace) && <span className="header-laps">Laps</span>}
               {isQualifying && <span className="header-q3">Q3</span>}
               {isQualifying && <span className="header-pos-q2">Pos Q2</span>}
@@ -223,12 +207,9 @@ function SessionResultsPanel({ sessionKey }) {
               {isQualifying && <span className="header-pos-q1">Pos Q1</span>}
               {isQualifying && <span className="header-q1">Q1</span>}
 
-
-              {/* CABEÇALHO CONDICIONAL "BEST" / "DURATION" */}
               {isPractice && <span className="header-best">Best</span>}
               {isRace && <span className="header-duration-race">Duration</span>}
 
-              {/* CORRIGIDO: CABEÇALHO "GAP" SÓ PARA PRACTICE/RACE */}
               {!(isQualifying) && <span className="header-gap">Gap</span>} 
               
               {(isPractice || isRace) && <span className="header-status">Status</span>} 
@@ -267,7 +248,6 @@ function SessionResultsPanel({ sessionKey }) {
                       <span className="pilot">{item.broadcast_name} ({item.team_name})</span>
                       <span className="number-of-laps">{item.number_of_laps || '-'}</span> 
                       
-                      {/* APENAS O VALOR FORMATADO DA DURAÇÃO (COM 3 DÍGITOS PARA MS) */}
                       <span className="duration">
                         {sessionType === 'Practice' && formatSecondsToMinutesSeconds(item.duration && item.duration[0])}
                         {sessionType === 'Race' && formatTotalRaceDuration(item.duration && item.duration[0])}
@@ -294,7 +274,6 @@ function SessionResultsPanel({ sessionKey }) {
                       </>
                   )}
 
-                  {/* PLACEHOLDER PARA OUTROS TIPOS DE SESSÃO NÃO TRATADOS */}
                   {!(isPractice || isRace || isQualifying) && (
                       <span className="full-row-item">
                         {item.broadcast_name} - Posição: {displayedPosition} (Tipo de Sessão: {sessionType})
@@ -304,7 +283,6 @@ function SessionResultsPanel({ sessionKey }) {
               );
             })}
           </ul>
-          {/* Renderização da imagem de hover */}
           {hoveredHeadshotUrl && (
             <div className="headshot-hover-container">
               <img

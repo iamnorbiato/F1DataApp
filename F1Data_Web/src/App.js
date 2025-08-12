@@ -1,5 +1,5 @@
 // G:\Learning\F1Data\F1Data_Web\src\App.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import MeetingsList from './MeetingsList';
 import Sessions from './Sessions';
@@ -8,13 +8,14 @@ import SessionResultsPanel from './SessionResultsPanel';
 import RaceControl from './RaceControl';
 import DriversList from './DriversList';
 import TrackMap from './TrackMap';
+import DashboardPanel from './DashboardPanel'; // Importa o novo componente
 import { API_BASE_URL } from './api';
 
 // Função para converter uma data para ISO string UTC com "Z" no final
 function toUTCISOString(dateStr) {
   if (!dateStr) return null;
   const date = new Date(dateStr);
-  if (isNaN(date)) return null; // Verifica data inválida
+  if (isNaN(date)) return null;
   return date.toISOString();
 }
 
@@ -31,9 +32,6 @@ function App() {
   const [menuOrigin, setMenuOrigin] = useState(null);
   const [selectedDriverNumber, setSelectedDriverNumber] = useState(null);
   const [selectedDriverObject, setSelectedDriverObject] = useState(null);
-  // REMOVIDO: Estados para as datas MIN e MAX de Location foram movidos para o TrackMap
-  // const [locationMinDate, setLocationMinDate] = useState(null);
-  // const [locationMaxDate, setLocationMaxDate] = useState(null);
 
   const handleHamburgerClick = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -58,7 +56,6 @@ function App() {
     setSelectedMeetingName(null);
     setSelectedCircuitShortName(null);
     setSelectedSessionKey(null);
-    // REMOVIDO: reset de datas de location
     setCircuitRef(null);
     setSelectedDriverNumber(null);
     setSelectedDriverObject(null);
@@ -85,7 +82,6 @@ function App() {
     setSelectedMeetingName(null);
     setSelectedCircuitShortName(null);
     setSelectedSessionKey(null);
-    // REMOVIDO: reset de datas de location
     setCircuitRef(null);
     setSelectedDriverNumber(null);
     setSelectedDriverObject(null);
@@ -98,7 +94,6 @@ function App() {
     setSelectedMeetingName(meetingName);
     setSelectedCircuitShortName(circuitShortName);
     setSelectedSessionKey(null);
-    // REMOVIDO: reset de datas de location
     setSelectedDriverNumber(null);
     setSelectedDriverObject(null);
 
@@ -131,9 +126,8 @@ function App() {
 
   const handleSessionSelect = (sessionKey, sessionName, dateStart, dateEnd) => {
     setSelectedSessionKey(sessionKey);
-    // REMOVIDO: O TrackMap agora será responsável por buscar as datas de location
     setSelectedDriverNumber(null);
-    setSelectedDriverObject(null); 
+    setSelectedDriverObject(null);
     console.log(`Sessão selecionada: ${sessionKey}, ${sessionName} (Origem: ${menuOrigin})`);
   };
 
@@ -141,7 +135,6 @@ function App() {
     setSelectedDriverNumber(driverObject.driver_number);
     setSelectedDriverObject(driverObject);
     console.log(`Driver selecionado: ${driverObject.driver_number}`);
-    // REMOVIDO: A chamada da API para min-max-location-date foi movida para o TrackMap
   };
   
   return (
@@ -236,7 +229,7 @@ function App() {
                 </div>
               )}
               {selectedSessionKey && (
-                <div className="drivers-side-panel">
+                <div className="drivers-side-panel"> 
                     <DriversList
                       sessionKey={selectedSessionKey}
                       onDriverSelect={handleDriverSelect}
@@ -245,14 +238,13 @@ function App() {
                 </div>
               )}
               {selectedSessionKey && selectedDriverObject && (
-                <div className="telemetry-display-panel">
-                  <TrackMap
-                    sessionKey={selectedSessionKey}
-                    selectedDriver={selectedDriverObject}
-                    // REMOVIDO: As datas agora são buscadas dentro do TrackMap
-                    // startDate={locationMinDate}
-                    // endDate={locationMaxDate}
-                  />
+                // O novo layout para TrackMap e Dashboard Panel
+                <div className="telemetry-dashboard-wrapper">
+                        <TrackMap
+                            sessionKey={selectedSessionKey}
+                            selectedDriver={selectedDriverObject}
+                        />
+                    <DashboardPanel />
                 </div>
               )}
             </div>
