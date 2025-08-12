@@ -244,8 +244,8 @@ function App() {
                             sessionKey={selectedSessionKey}
                             selectedDriver={selectedDriverObject}
                         />
-                    <DashboardPanel />
                 </div>
+//                        <DashboardPanel />
               )}
             </div>
           ) : (

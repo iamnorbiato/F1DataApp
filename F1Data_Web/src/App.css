@@ -472,6 +472,7 @@ a.header-nav-item:hover {
   overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: var(--accent-green) var(--secondary-dark-bg);
+  text-decoration: none; 
 }
 
 .session-list-item {
@@ -487,6 +488,7 @@ a.header-nav-item:hover {
   display: flex; 
   justify-content: space-between; 
   align-items: center;
+  text-decoration: none; 
 }
 
 .session-list-item:last-child {
@@ -629,7 +631,8 @@ a.header-nav-item:hover {
   flex-direction: column;
   height: auto;
   min-height: 220px;
-  max-height: 43vh; 
+  max-height: 43vh;
+  text-decoration: none; 
 }
 
 .session-results-panel h2 {
@@ -647,6 +650,7 @@ a.header-nav-item:hover {
   list-style: none;
   padding: 0;
   margin: 0;
+  text-decoration: none;
 }
 
 .session-results-item {
